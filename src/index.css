@@ -1,0 +1,386 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  /* Melhora a renderização de fontes */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Linear-inspired Design System */
+@layer base {
+  :root {
+    /* Paleta minimalista Prospect CRM */
+    --primary: 172 100% 40%; /* Teal #00A79D */
+    --primary-foreground: 0 0% 100%; /* Branco */
+    --accent: 172 100% 40%; /* Igual ao primary */
+    --accent-foreground: 0 0% 100%;
+    --background: 0 0% 99%; /* Branco quase puro */
+    --background-secondary: 0 0% 97%;
+    --foreground: 0 0% 10%; /* Preto suave */
+    --foreground-secondary: 0 0% 45%;
+    --foreground-muted: 0 0% 64%;
+    --border: 0 0% 89%; /* Cinza claro */
+    --border-secondary: 0 0% 94%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --radius: 0.5rem; /* 8px */
+    /* Cores de status */
+    --success: 142 71% 45%; /* Verde #22C55E */
+    --warning: 48 96% 53%; /* Amarelo #FACC15 */
+    --danger: 0 84% 60%; /* Vermelho #EF4444 */
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    --ring: 172 100% 40%;
+    --input: 0 0% 89%;
+  }
+
+  .dark {
+    --primary: 172 100% 40%;
+    --primary-foreground: 0 0% 100%;
+    --accent: 172 100% 40%;
+    --accent-foreground: 0 0% 100%;
+    --background: 0 0% 6%; /* Quase preto */
+    --background-secondary: 0 0% 10%;
+    --foreground: 0 0% 98%; /* Branco */
+    --foreground-secondary: 0 0% 64%;
+    --foreground-muted: 0 0% 45%;
+    --border: 0 0% 14%;
+    --border-secondary: 0 0% 12%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 98%;
+    --radius: 0.5rem;
+    --success: 142 71% 45%;
+    --warning: 48 96% 53%;
+    --danger: 0 84% 60%;
+    --muted: 0 0% 9%;
+    --muted-foreground: 0 0% 64%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 98%;
+    --ring: 172 100% 40%;
+    --input: 0 0% 14%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  h1 {
+    font-family: 'Inter', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  h2 {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+  }
+  h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+  p, label, span, li, input, textarea, button {
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.6;
+  }
+  small, .text-xs {
+    font-size: 0.875rem;
+    font-weight: 400;
+  }
+}
+
+/* Hide scrollbar for horizontal gallery */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Custom animations for presell page */
+  .animate-fadeIn {
+    animation: fadeIn 0.8s ease-out forwards;
+    opacity: 0;
+  }
+
+  .animate-slideUp {
+    animation: slideUp 0.8s ease-out forwards;
+    opacity: 0;
+    transform: translateY(30px);
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Estilos para texto processado */
+  .text-processed strong {
+    font-weight: 700;
+    color: #ec4899; /* pink-500 */
+  }
+}
+
+/* CORRIGIDO: Não forçar background nos vídeos (causava tela preta no iOS) */
+video:not([data-ios]) {
+  background-color: #000000;
+}
+
+/* Containers de vídeo também devem ter fundo preto */
+.video-container {
+  background-color: #000000;
+}
+
+/* Garantir que thumbnails preencham completamente */
+.video-thumbnail {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+}
+
+/* Para vídeos com crop_bottom, usar fundo branco na área cortada */
+.video-container.with-crop {
+  background-color: #ffffff !important;
+}
+
+.video-container.with-crop video:not([data-ios]) {
+  background-color: #ffffff;
+}
+
+/* Forçar fundo branco em vídeos com crop */
+.with-crop .video-thumbnail {
+  background-color: #ffffff !important;
+}
+
+/* Estilos específicos para iOS e mobile */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari */
+  img {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+  
+  video {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    -webkit-playsinline: true;
+  }
+  
+  /* Prevenir zoom duplo toque */
+  * {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  
+  /* Permitir seleção onde necessário */
+  input, textarea, [contenteditable] {
+    -webkit-user-select: auto;
+    user-select: auto;
+    -webkit-touch-callout: default;
+  }
+  
+  /* Melhorar performance de scroll */
+  body {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+  }
+}
+
+/* Garantir que imagens sejam carregadas corretamente */
+img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Configurações específicas para vídeos */
+video {
+  max-width: 100%;
+  height: auto;
+  outline: none;
+}
+
+/* Estilos para story viewer */
+.story-background {
+  will-change: transform;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+}
+
+/* Garantir que o conteúdo seja visível em todas as telas */
+.story-overlay {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Prevenir zoom em botões e elementos interativos */
+button, a, [role="button"] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Melhorar carregamento de fontes */
+@font-face {
+  font-display: swap;
+}
+
+/* Otimizações específicas para dispositivos móveis */
+@media (max-width: 768px) {
+  /* Melhorar scroll no mobile */
+  body {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Garantir que o root ocupe toda a tela */
+  #root {
+    min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden; /* Prevenir scroll horizontal indesejado */
+  }
+
+  /* Otimizar renderização de texto */
+  * {
+    text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Melhorar performance de animações */
+  * {
+    will-change: transform;
+    backface-visibility: hidden;
+    perspective: 1000;
+    transform: translateZ(0);
+  }
+
+  /* Otimizar inputs para mobile */
+  input, textarea, select {
+    font-size: 16px !important; /* Prevenir zoom automático no iOS */
+    max-width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 0;
+  }
+
+  /* Melhorar performance de scroll */
+  .overflow-auto, .overflow-y-auto, .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+  }
+
+  /* Otimizar imagens para mobile */
+  img {
+    content-visibility: auto;
+    contain: content;
+  }
+}
+
+/* Animações Premium para PixCheckout */
+@keyframes shine {
+  0% { transform: translateX(-100%) skewX(-12deg); }
+  100% { transform: translateX(200%) skewX(-12deg); }
+}
+
+.animate-shine {
+  animation: shine 2s infinite;
+}
+
+.hover\\:animate-shine:hover {
+  animation: shine 1.5s ease-in-out;
+}
+
+.page-content-wrapper {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .page-content-wrapper {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page-content-wrapper {
+    padding-left: 2rem;
+    padding-right: 2rem;
+    max-width: 1800px;
+  }
+}
+
+/* Melhorar carregamento de fontes */
+@font-face {
+  font-display: swap;
+}
+
+/* Prevenir FOIT (Flash of Invisible Text) */
+html {
+  font-display: swap;
+}
+
+/* Melhorar performance de animações */
+@layer utilities {
+  .animate-gpu {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000;
+    will-change: transform;
+  }
+}

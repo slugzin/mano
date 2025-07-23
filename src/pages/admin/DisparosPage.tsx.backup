@@ -1,0 +1,1144 @@
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
+import {
+  Users,
+  MessageCircle,
+  Play,
+  Plus,
+  ChevronRight,
+  Clock,
+  CheckCircle,
+  ArrowUpRight,
+  Edit3,
+  Save,
+  X,
+  Building,
+  Check,
+  Filter,
+  Target,
+  BarChart3,
+  Phone,
+  ChevronDown,
+  MapPin,
+  Globe
+} from '../../utils/icons';
+import { whatsappService, WhatsAppInstance } from '../../services/whatsappService';
+import { buscarEstatisticasFunil, type EstatisticasFunil } from '../../services/edgeFunctions';
+import { templateService, MessageTemplate } from '../../services/templateService';
+import { supabase } from '../../lib/supabase';
+import { useFiltros } from '../../contexts/FiltrosContext';
+import FiltrosAtivosBanner from '../../components/ui/FiltrosAtivosBanner';
+import PageHeader from '../../components/ui/PageHeader';
+import Button from '../../components/ui/Button';
+
+// Mapeamento de ícones por tipo de pesquisa comum
+const PESQUISA_ICONS: Record<string, string> = {
+  'todas': '🎯',
+  'clinica': '🏥',
+  'clinicas': '🏥',
+  'médico': '👨‍⚕️',
+  'medico': '👨‍⚕️',
+  'médica': '👨‍⚕️',
+  'medica': '👨‍⚕️',
+  'dentista': '🦷',
+  'odontologia': '🦷',
+  'psicólogo': '🧠',
+  'psicologo': '🧠',
+  'psiquiatra': '🧠',
+  'pediatra': '👶',
+  'ortopedista': '🦴',
+  'cardiologista': '❤️',
+  'dermatologista': '🔬',
+  'oftalmologista': '👁️',
+  'ginecologista': '👩‍⚕️'
+};
+
+// Interface para segmentos baseados no Kanban real
+interface KanbanSegment {
+  id: string;
+  title: string;
+  count: number;
+  description: string;
+  gradient: string;
+  bgPattern: string;
+  status: string;
+}
+
+// Interface para templates de mensagem (usando a do serviço)
+
+const DisparosPage: React.FC = () => {
+  const location = useLocation();
+  const empresaSelecionada = location.state?.empresaSelecionada;
+  const modalidadeInicial = location.state?.modalidadeSelecionada;
+  const { filtrosAtivos, setFiltrosAtivos, temFiltrosAtivos, getFiltrosAtivosTexto } = useFiltros();
+  
+  const [kanbanSegments, setKanbanSegments] = useState<KanbanSegment[]>([]);
+  const [whatsappInstances, setWhatsappInstances] = useState<WhatsAppInstance[]>([]);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [selectedSegment, setSelectedSegment] = useState<KanbanSegment | null>(null);
+  const [selectedWhatsApp, setSelectedWhatsApp] = useState<WhatsAppInstance | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
+  const [customMessage, setCustomMessage] = useState('');
+  const [delay, setDelay] = useState(30);
+  const [isLaunching, setIsLaunching] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+  const [newTemplate, setNewTemplate] = useState({ name: '', content: '' });
+  const [nomeCampanha, setNomeCampanha] = useState('');
+  
+  // Novos estados para seleção de modalidade
+  const [modalidades, setModalidades] = useState<string[]>([]);
+  const [modalidadeSelecionada, setModalidadeSelecionada] = useState<string | null>(modalidadeInicial || null);
+  
+  const [showFiltrosAvancados, setShowFiltrosAvancados] = useState(true);
+
+  // Estado para empresas do segmento e seleção
+  const [empresasSegmento, setEmpresasSegmento] = useState<any[]>([]);
+  const [selecionadas, setSelecionadas] = useState<number[]>([]);
+
+  // Atualizar a condição canLaunch
+  const canLaunch = selectedWhatsApp && customMessage.trim() && selecionadas.length > 0;
+
+  // Carregar instâncias do WhatsApp
+  const carregarWhatsAppInstances = async () => {
+    try {
+      const result = await whatsappService.listInstances();
+      if (result.success && result.data) {
+        setWhatsappInstances(result.data.filter(inst => inst.status === 'connected'));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar instâncias do WhatsApp:', error);
+    }
+  };
+
+  // Carregar dados iniciais
+  useEffect(() => {
+    loadRealData();
+    carregarModalidades();
+    carregarWhatsAppInstances();
+  }, []);
+
+  // Carregar conexões do WhatsApp
+  const carregarConexoesWhatsApp = async () => {
+    try {
+      const { data: instances, error } = await supabase
+        .from('whatsapp_instances')
+        .select('*')
+        .eq('status', 'connected');
+
+      if (error) throw error;
+      
+      // Mapear para formato WhatsAppInstance
+      const mappedInstances = (instances || []).map(inst => ({
+        id: inst.instance_id,
+        name: inst.instance_name,
+        status: inst.status as 'connected' | 'disconnected' | 'connecting',
+        createdAt: inst.created_at,
+        instanceId: inst.instance_id
+      }));
+      
+      setConnections(mappedInstances);
+    } catch (error) {
+      console.error('Erro ao carregar conexões WhatsApp:', error);
+    }
+  };
+
+  // Processar empresa selecionada quando a página carregar
+  useEffect(() => {
+    if (empresaSelecionada) {
+      console.log('🏢 Empresa selecionada recebida:', empresaSelecionada.titulo);
+      
+      // Se há uma empresa selecionada, pular a seleção de modalidade e segmento
+      // e ir direto para a configuração do disparo
+      if (modalidadeInicial) {
+        setModalidadeSelecionada(modalidadeInicial);
+      }
+      
+      // Selecionar automaticamente o segmento "A Contatar" se a empresa vier de lá
+      const segmentAContatar = kanbanSegments.find(s => s.id === 'a_contatar');
+      if (segmentAContatar) {
+        setSelectedSegment(segmentAContatar);
+      }
+    }
+  }, [empresaSelecionada, modalidadeInicial, kanbanSegments]);
+
+  // Recarregar dados quando modalidade ou filtros avançados mudarem
+  useEffect(() => {
+    if (modalidadeSelecionada) {
+      loadRealData(modalidadeSelecionada);
+    }
+  }, [modalidadeSelecionada, filtrosAtivos]);
+
+  const carregarModalidades = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('empresas')
+        .select('pesquisa')
+        .not('pesquisa', 'is', null);
+
+      if (error) throw error;
+
+      // Extrair modalidades únicas
+      const modalidadesUnicas = [...new Set(data.map(e => e.pesquisa))];
+      setModalidades(modalidadesUnicas);
+    } catch (error) {
+      console.error('Erro ao carregar modalidades:', error);
+    }
+  };
+
+  const loadRealData = async (modalidade?: string) => {
+    setIsLoading(true);
+
+    try {
+      // Buscar empresas do banco com filtros
+      let query = supabase
+        .from('empresas')
+        .select('*')
+        .order('capturado_em', { ascending: false });
+
+      // Aplicar filtro de modalidade
+      if (modalidade && modalidade !== 'todas') {
+        query = query.eq('pesquisa', modalidade);
+      }
+
+      const { data: empresas, error: empresasError } = await query;
+
+      if (empresasError) {
+        console.error('Erro ao buscar empresas:', empresasError);
+        setIsLoading(false);
+        return;
+      }
+
+      // Aplicar filtros avançados
+      let empresasFiltradas = empresas || [];
+
+      if (filtrosAtivos.apenasComWebsite) {
+        empresasFiltradas = empresasFiltradas.filter(e => e.website);
+      }
+
+      if (filtrosAtivos.apenasSemWebsite) {
+        empresasFiltradas = empresasFiltradas.filter(e => !e.website);
+      }
+
+      if (filtrosAtivos.apenasComWhatsApp) {
+        empresasFiltradas = empresasFiltradas.filter(e => isWhatsApp(e.telefone));
+      }
+
+      if (filtrosAtivos.apenasComTelefone) {
+        empresasFiltradas = empresasFiltradas.filter(e => e.telefone);
+      }
+
+      if (filtrosAtivos.apenasComEndereco) {
+        empresasFiltradas = empresasFiltradas.filter(e => e.endereco);
+      }
+
+      if (filtrosAtivos.avaliacaoMinima > 0) {
+        empresasFiltradas = empresasFiltradas.filter(e => 
+          e.avaliacao && e.avaliacao >= filtrosAtivos.avaliacaoMinima
+        );
+      }
+
+      if (filtrosAtivos.avaliacaoMaxima < 5) {
+        empresasFiltradas = empresasFiltradas.filter(e => 
+          e.avaliacao && e.avaliacao <= filtrosAtivos.avaliacaoMaxima
+        );
+      }
+
+      console.log(`✅ Empresas filtradas: ${empresasFiltradas.length} de ${empresas?.length || 0}`);
+
+      // Buscar conexões ativas
+      const connectionsResult = await whatsappService.listInstances();
+      if (connectionsResult.success && connectionsResult.data) {
+        const activeConnections = connectionsResult.data.filter(
+          conn => conn.status === 'connected'
+        );
+        setConnections(activeConnections);
+        console.log('✅ Conexões WhatsApp carregadas:', activeConnections.length);
+      } else {
+        console.error('Erro ao carregar conexões WhatsApp:', connectionsResult.error);
+      }
+
+      // Processar templates
+      const templatesResult = await templateService.listTemplates();
+      if (templatesResult.success && templatesResult.data) {
+        setTemplates(templatesResult.data);
+        console.log('✅ Templates carregados:', templatesResult.data.length);
+      } else {
+        console.error('Erro ao carregar templates:', templatesResult.error);
+      }
+
+      // Processar dados do funil baseado nas empresas filtradas
+      const funil = {
+        a_contatar: empresasFiltradas.filter(e => e.status === 'a_contatar').length,
+        contato_realizado: empresasFiltradas.filter(e => e.status === 'contato_realizado').length,
+        em_negociacao: empresasFiltradas.filter(e => e.status === 'em_negociacao').length,
+        ganhos: empresasFiltradas.filter(e => e.status === 'ganhos').length,
+        perdidos: empresasFiltradas.filter(e => e.status === 'perdidos').length,
+      };
+      
+      const segments: KanbanSegment[] = [
+        {
+          id: 'a_contatar',
+          title: 'A Contatar',
+          count: funil.a_contatar,
+          description: 'Novos leads prontos para primeiro contato',
+          gradient: 'from-emerald-500 to-green-500',
+          bgPattern: 'bg-gradient-to-br from-emerald-500/20 to-green-500/20',
+          status: 'a_contatar'
+        },
+        {
+          id: 'contato_realizado',
+          title: 'Follow-up',
+          count: funil.contato_realizado,
+          description: 'Leads que precisam de acompanhamento',
+          gradient: 'from-blue-500 to-cyan-500',
+          bgPattern: 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20',
+          status: 'contato_realizado'
+        },
+        {
+          id: 'em_negociacao',
+          title: 'Em Negociação',
+          count: funil.em_negociacao,
+          description: 'Leads ativos em processo de negociação',
+          gradient: 'from-purple-500 to-pink-500',
+          bgPattern: 'bg-gradient-to-br from-purple-500/20 to-pink-500/20',
+          status: 'em_negociacao'
+        },
+        {
+          id: 'perdidos',
+          title: 'Reativar',
+          count: funil.perdidos,
+          description: 'Contatos perdidos para tentar reativação',
+          gradient: 'from-yellow-500 to-orange-500',
+          bgPattern: 'bg-gradient-to-br from-yellow-500/20 to-orange-500/20',
+          status: 'perdidos'
+        }
+      ];
+
+      setKanbanSegments(segments.filter(segment => segment.count > 0));
+
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
+
+  const handleModalidadeSelect = (modalidade: string) => {
+    setModalidadeSelecionada(modalidade);
+  };
+
+  const handleSegmentSelect = (segment: KanbanSegment) => {
+    setSelectedSegment(segment);
+  };
+
+  const handleTemplateSelect = (templateId: number) => {
+    setSelectedTemplate(templateId);
+    const template = templates.find(t => t.id === templateId);
+    if (template) {
+      setCustomMessage(template.content);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!newTemplate.name || !newTemplate.content) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('message_templates')
+        .insert([{
+          name: newTemplate.name,
+          content: newTemplate.content,
+          preview: newTemplate.content.substring(0, 100) + '...'
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Recarregar templates
+      const templatesResult = await templateService.listTemplates();
+      if (templatesResult.success && templatesResult.data) {
+        setTemplates(templatesResult.data);
+      }
+      
+      // Limpar formulário
+      setNewTemplate({ name: '', content: '' });
+      setShowTemplateEditor(false);
+    } catch (error) {
+      console.error('Erro ao salvar template:', error);
+    }
+  };
+
+  // Adicionar estados para upload de mídia
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaType, setMediaType] = useState<'imagem' | 'audio' | 'nenhum'>('nenhum');
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+
+  const handleMediaUpload = async (file: File, type: 'imagem' | 'audio') => {
+    // Exemplo usando Supabase Storage (ajuste conforme seu backend)
+    const ext = file.name.split('.').pop();
+    const filePath = `disparos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from('midias-disparos').upload(filePath, file);
+    if (error) throw error;
+    const { data: publicData } = supabase.storage.from('midias-disparos').getPublicUrl(filePath);
+    const url = publicData?.publicUrl || '';
+    setMediaUrl(url);
+    setMediaType(type);
+  };
+
+  // Função para formatar telefone para Evolution API
+  function formatarTelefoneEvolution(telefone: string | undefined): string {
+    if (!telefone) return '';
+    let num = telefone.replace(/\D/g, '');
+    if (!num.startsWith('55')) {
+      num = '55' + num;
+    }
+    // Após o DDI e DDD, manter apenas os últimos 8 dígitos (removendo qualquer 9 extra)
+    // Ex: 5541998877665 -> 55418877665
+    if (num.length > 12) {
+      num = num.slice(0, 4) + num.slice(-8);
+    }
+    return num + '@s.whatsapp.net';
+  }
+
+  const handleLaunch = async () => {
+    if (!selectedWhatsApp || !customMessage.trim()) return;
+    setIsLaunching(true);
+    try {
+      // Buscar nome da conexão selecionada
+      const conexaoSelecionada = selectedWhatsApp;
+      const conexaoNome = conexaoSelecionada ? encodeURIComponent(conexaoSelecionada.name) : '';
+
+      // Chamar a função RPC para agendar os disparos
+      const { data, error } = await supabase.rpc('agendar_disparos', {
+        p_empresa_ids: selecionadas,
+        p_mensagem: customMessage,
+        p_conexao_id: conexaoNome,
+        p_tipo_midia: mediaType,
+        p_midia_url: mediaUrl,
+        p_delay_segundos: delay,
+        p_nome_campanha: nomeCampanha.trim() || null
+      });
+
+      if (error) throw error;
+
+      // Verificar resultado
+      if (data.success) {
+        // Feedback visual
+        setProgress(100);
+        setTimeout(() => {
+          setIsLaunching(false);
+          setProgress(0);
+          setSelectedSegment(null);
+          setSelectedWhatsApp(null);
+          setSelectedTemplate(null);
+          setCustomMessage('');
+          setMediaFile(null);
+          setMediaUrl(null);
+          setMediaType('nenhum');
+          setNomeCampanha('');
+          loadRealData();
+        }, 2000);
+
+        // Mostrar mensagem de sucesso
+        alert(`Campanha "${data.nome_campanha}" criada com sucesso!\n${data.tasks_criadas} disparos agendados.`);
+      } else {
+        throw new Error(`Erro ao agendar disparos: ${data.erros.join(', ')}`);
+      }
+    } catch (err: any) {
+      alert('Erro ao agendar disparos: ' + err.message);
+      setIsLaunching(false);
+    }
+  };
+
+  // Função para verificar se um telefone é WhatsApp
+  const isWhatsApp = (telefone: string | undefined): boolean => {
+    if (!telefone) return false;
+    const cleanPhone = telefone.replace(/\D/g, '');
+    return cleanPhone.length >= 10 && cleanPhone.length <= 13;
+  };
+
+  // Componente de Checkbox Customizado
+  const CustomCheckbox: React.FC<{
+    id: string;
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    label: string;
+    icon?: React.ReactNode;
+  }> = ({ id, checked, onChange, label, icon }) => (
+    <motion.button
+      type="button"
+      aria-pressed={checked}
+      tabIndex={0}
+      className={`
+        group flex items-center gap-3 px-5 py-3 rounded-full border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40
+        ${checked
+          ? 'bg-accent/20 border-accent text-accent-foreground'
+          : 'bg-background border-border text-muted-foreground hover:border-accent/50 hover:text-foreground'}
+      `}
+      onClick={() => onChange(!checked)}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      style={{ minHeight: 48 }}
+    >
+      <span className={`text-xl transition-colors duration-200 ${checked ? 'text-accent' : 'text-muted-foreground'}`}>{icon}</span>
+      <span className="font-medium text-sm select-none flex-1 text-left">{label}</span>
+      <span className={`ml-2 w-5 h-5 flex items-center justify-center rounded-full border-2 transition-all duration-200 ${checked ? 'bg-accent border-accent' : 'border-border bg-background'}`}>{checked && <Check size={12} className="text-accent-foreground" />}</span>
+    </motion.button>
+  );
+
+  // Buscar empresas do segmento ao selecionar segmento
+  useEffect(() => {
+    const fetchEmpresasSegmento = async () => {
+      if (!selectedSegment) return;
+      let query = supabase
+        .from('empresas')
+        .select('*')
+        .order('capturado_em', { ascending: false });
+      if (modalidadeSelecionada && modalidadeSelecionada !== 'todas') {
+        query = query.eq('pesquisa', modalidadeSelecionada);
+      }
+      // Filtros avançados
+      if (filtrosAtivos.apenasComWebsite) query = query.not('website', 'is', null);
+      if (filtrosAtivos.apenasSemWebsite) query = query.is('website', null);
+      if (filtrosAtivos.apenasComWhatsApp) query = query.not('telefone', 'is', null);
+      if (filtrosAtivos.apenasComTelefone) query = query.not('telefone', 'is', null);
+      if (filtrosAtivos.apenasComEndereco) query = query.not('endereco', 'is', null);
+      const { data, error } = await query;
+      if (!error && data) {
+        const filtradas = data.filter(e => e.status === selectedSegment.id);
+        setEmpresasSegmento(filtradas);
+        setSelecionadas(filtradas.map(e => e.id)); // pré-selecionar todas
+      }
+    };
+    fetchEmpresasSegmento();
+  }, [selectedSegment, modalidadeSelecionada, filtrosAtivos]);
+
+  // Funções de seleção
+  const toggleSelecionada = (id: number) => {
+    setSelecionadas(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+  const selecionarTodas = () => setSelecionadas(empresasSegmento.map(e => e.id));
+  const limparSelecao = () => setSelecionadas([]);
+  const selecionadasEmpresas = empresasSegmento.filter(e => selecionadas.includes(e.id));
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            className="w-16 h-16 mx-auto mb-4"
+          >
+            <MessageCircle size={64} className="text-accent" />
+          </motion.div>
+          <p className="text-muted-foreground text-lg">Carregando dados do Kanban...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background p-2 md:p-6">
+      <div className="page-content-wrapper">
+        <PageHeader
+          title="Disparos"
+          subtitle="Selecione as empresas e configure sua campanha de mensagens."
+          icon={<MessageCircle size={32} className="text-primary" />}
+        />
+
+        <div className="space-y-4 md:space-y-6">
+          <h2 className="text-base md:text-lg font-semibold text-foreground">
+                Para quais empresas você deseja enviar?
+          </h2>
+
+              {/* Filtros Avançados */}
+          <div className="bg-card border border-border rounded-lg md:rounded-xl">
+            <button
+              onClick={() => setShowFiltrosAvancados(!showFiltrosAvancados)}
+              className="w-full flex items-center justify-between p-3 md:p-4"
+            >
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="p-1.5 md:p-2 bg-accent/10 rounded-lg">
+                  <Filter size={14} className="text-accent" />
+                      </div>
+                      <div>
+                  <h3 className="text-sm font-medium text-foreground">Filtros Avançados</h3>
+                        {temFiltrosAtivos && (
+                    <p className="text-[11px] md:text-xs text-muted-foreground mt-0.5">
+                      {getFiltrosAtivosTexto()}
+                    </p>
+                        )}
+                      </div>
+                    </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] md:text-xs text-accent">
+                  {showFiltrosAvancados ? 'Ocultar' : 'Mostrar'}
+                </span>
+                <ChevronDown 
+                  size={14} 
+                  className={`text-accent transition-transform duration-200 ${
+                    showFiltrosAvancados ? 'rotate-180' : ''
+                  }`}
+                />
+                  </div>
+            </button>
+                  
+                    {showFiltrosAvancados && (
+              <div className="border-t border-border p-3 md:p-4 space-y-4">
+                {/* Informações de Contato */}
+                <div>
+                  <p className="text-[11px] md:text-xs font-medium text-muted-foreground mb-3">Informações de Contato</p>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setFiltrosAtivos({ 
+                            ...filtrosAtivos, 
+                        apenasComWebsite: !filtrosAtivos.apenasComWebsite,
+                        apenasSemWebsite: false 
+                      })}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
+                        filtrosAtivos.apenasComWebsite 
+                          ? 'bg-accent/10 text-accent' 
+                          : 'hover:bg-accent/5 text-foreground'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Globe size={14} />
+                        <span className="text-xs">Apenas com website</span>
+                      </div>
+                      {filtrosAtivos.apenasComWebsite && <Check size={14} />}
+                    </button>
+
+                    <button
+                      onClick={() => setFiltrosAtivos({ 
+                            ...filtrosAtivos, 
+                        apenasComWhatsApp: !filtrosAtivos.apenasComWhatsApp 
+                      })}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
+                        filtrosAtivos.apenasComWhatsApp 
+                          ? 'bg-accent/10 text-accent' 
+                          : 'hover:bg-accent/5 text-foreground'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <MessageCircle size={14} />
+                        <span className="text-xs">Apenas com WhatsApp</span>
+                      </div>
+                      {filtrosAtivos.apenasComWhatsApp && <Check size={14} />}
+                    </button>
+
+                    <button
+                      onClick={() => setFiltrosAtivos({ 
+                            ...filtrosAtivos, 
+                        apenasComTelefone: !filtrosAtivos.apenasComTelefone 
+                      })}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
+                        filtrosAtivos.apenasComTelefone 
+                          ? 'bg-accent/10 text-accent' 
+                          : 'hover:bg-accent/5 text-foreground'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Phone size={14} />
+                        <span className="text-xs">Apenas com telefone</span>
+                      </div>
+                      {filtrosAtivos.apenasComTelefone && <Check size={14} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Localização */}
+                <div>
+                  <p className="text-[11px] md:text-xs font-medium text-muted-foreground mb-3">Localização</p>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setFiltrosAtivos({ 
+                            ...filtrosAtivos, 
+                        apenasComEndereco: !filtrosAtivos.apenasComEndereco 
+                      })}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
+                        filtrosAtivos.apenasComEndereco 
+                          ? 'bg-accent/10 text-accent' 
+                          : 'hover:bg-accent/5 text-foreground'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <MapPin size={14} />
+                        <span className="text-xs">Apenas com endereço</span>
+                      </div>
+                      {filtrosAtivos.apenasComEndereco && <Check size={14} />}
+                    </button>
+                  </div>
+                        </div>
+
+                {temFiltrosAtivos && (
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      onClick={() => setFiltrosAtivos(filtrosAtivos)}
+                      className="text-[11px] md:text-xs text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1.5"
+                    >
+                      <X size={12} className="md:w-4 md:h-4" />
+                      Limpar filtros
+                    </button>
+                        </div>
+                    )}
+                </div>
+            )}
+          </div>
+
+          {/* Ato I: Lista de Modalidades */}
+          {!modalidadeSelecionada ? (
+            <div className="space-y-2 md:space-y-3">
+              <button
+                onClick={() => handleModalidadeSelect('todas')}
+                className="w-full bg-background hover:bg-accent/5 border border-border rounded-lg md:rounded-xl p-3 md:p-4 flex items-center gap-2 md:gap-3 transition-colors"
+              >
+                <div className="w-8 h-8 md:w-10 md:h-10 bg-accent/10 rounded-lg flex items-center justify-center">
+                  <Building size={16} className="md:w-5 md:h-5 text-accent" />
+                </div>
+                <div className="flex-1 text-left">
+                  <h3 className="text-xs md:text-sm font-medium text-foreground">Todas as Empresas</h3>
+                  <p className="text-[10px] md:text-xs text-muted-foreground">
+                    Enviar para todas as modalidades
+                  </p>
+                </div>
+              </button>
+
+              {modalidades.map((modalidade) => (
+                <button
+                  key={modalidade}
+                  onClick={() => handleModalidadeSelect(modalidade)}
+                  className="w-full bg-background hover:bg-accent/5 border border-border rounded-lg md:rounded-xl p-3 md:p-4 flex items-center gap-2 md:gap-3 transition-colors"
+                >
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-accent/10 rounded-lg flex items-center justify-center">
+                    <Target size={16} className="md:w-5 md:h-5 text-accent" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <h3 className="text-xs md:text-sm font-medium text-foreground capitalize">{modalidade}</h3>
+                    <p className="text-[10px] md:text-xs text-muted-foreground">
+                      Enviar para empresas desta modalidade
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : !selectedWhatsApp ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <button onClick={() => setModalidadeSelecionada(null)} className="hover:text-foreground transition-colors">
+                  Modalidades
+                </button>
+                <ChevronRight size={16} />
+                <span className="text-foreground font-medium">
+                  {modalidadeSelecionada === 'todas' ? 'Todas as Empresas' : modalidadeSelecionada}
+                </span>
+              </div>
+
+              <h2 className="text-2xl font-bold text-foreground text-center">
+                Selecione o WhatsApp para envio
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {whatsappInstances.length === 0 ? (
+                  <div className="col-span-full text-center py-12">
+                    <MessageCircle size={48} className="text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground mb-4">Nenhuma conexão ativa encontrada</p>
+                    <button
+                      onClick={() => window.location.href = '/admin/conexoes'}
+                      className="px-4 py-2 bg-accent hover:bg-accent/90 text-accent-foreground rounded-lg transition-colors"
+                    >
+                      Gerenciar Conexões
+                    </button>
+                  </div>
+                ) : (
+                  whatsappInstances.map((instance) => (
+                    <button
+                      key={instance.id}
+                      onClick={() => setSelectedWhatsApp(instance)}
+                      className="group relative p-6 bg-card backdrop-blur-sm border border-border rounded-xl hover:border-accent/50 transition-all duration-300"
+                    >
+                      <div className="absolute inset-0 bg-accent/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <div className="relative flex items-center gap-4">
+                        <div className="p-3 bg-green-500/20 rounded-lg">
+                          <MessageCircle size={24} className="text-green-500" />
+                        </div>
+                        <div className="text-left">
+                          <h3 className="text-xl font-bold text-foreground">{instance.name}</h3>
+                          <p className="text-muted-foreground">Conectado e pronto para uso</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : !selectedSegment ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <button onClick={() => setModalidadeSelecionada(null)} className="hover:text-foreground transition-colors">
+                  Modalidades
+                </button>
+                <ChevronRight size={16} />
+                <button onClick={() => setSelectedWhatsApp(null)} className="hover:text-foreground transition-colors">
+                  {modalidadeSelecionada === 'todas' ? 'Todas as Empresas' : modalidadeSelecionada}
+                </button>
+                <ChevronRight size={16} />
+                <span className="text-foreground font-medium">
+                  {selectedWhatsApp.name}
+                </span>
+              </div>
+
+              <h2 className="text-2xl font-bold text-foreground text-center">
+                Selecione o Segmento
+              </h2>
+
+              {/* Segmentos do Kanban */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {kanbanSegments.map((segment) => (
+                  <button
+                    key={segment.id}
+                    onClick={() => handleSegmentSelect(segment)}
+                    className={`
+                      relative overflow-hidden bg-background hover:bg-accent/5 border border-border 
+                      rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-all duration-200
+                      ${selectedSegment?.id === segment.id ? 'ring-2 ring-accent' : ''}
+                    `}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 bg-accent/10 rounded-lg flex items-center justify-center">
+                        <Users size={16} className="text-accent" />
+                      </div>
+                      <div>
+                        <span className="text-2xl font-bold text-accent">
+                          {segment.count}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-1">leads</span>
+                      </div>
+                    </div>
+                    <h3 className="text-sm font-medium text-foreground">{segment.title}</h3>
+                    <p className="text-xs text-muted-foreground mt-1">{segment.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Navegação da Conexão */}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                <button
+                  onClick={() => setSelectedWhatsApp(null)}
+                  className="text-xs hover:text-foreground transition-colors"
+                >
+                  Conexões WhatsApp
+                </button>
+                <ChevronRight size={14} />
+                <span className="text-xs text-foreground">
+                  {whatsappInstances.find(c => c.id === selectedWhatsApp?.id)?.name}
+                </span>
+              </div>
+
+              {/* Segmentos do Kanban */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {kanbanSegments.map((segment) => (
+                  <button
+                    key={segment.id}
+                    onClick={() => handleSegmentSelect(segment)}
+                    className={`
+                      relative overflow-hidden bg-background hover:bg-accent/5 border border-border 
+                      rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-all duration-200
+                      ${selectedSegment?.id === segment.id ? 'ring-2 ring-accent' : ''}
+                    `}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 bg-accent/10 rounded-lg flex items-center justify-center">
+                        <Users size={16} className="text-accent" />
+                      </div>
+                      <div>
+                        <span className="text-2xl font-bold text-accent">
+                          {segment.count}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-1">leads</span>
+                      </div>
+                    </div>
+                    <h3 className="text-sm font-medium text-foreground">{segment.title}</h3>
+                    <p className="text-xs text-muted-foreground mt-1">{segment.description}</p>
+                  </button>
+                ))}
+              </div>
+
+              {/* Lista de Empresas do Segmento */}
+              {selectedSegment && (
+                <div className="mt-6 space-y-4">
+                  <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+                    <div>
+                      <h3 className="text-sm font-medium text-foreground">
+                        Empresas em {selectedSegment.title}
+                            </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {selecionadas.length} de {empresasSegmento.length} empresas selecionadas
+                            </p>
+                          </div>
+
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+                  <button
+                          onClick={selecionarTodas}
+                          className="flex-1 sm:flex-initial text-xs px-4 py-2 bg-accent/10 text-accent hover:bg-accent/20 rounded-lg transition-colors"
+                  >
+                          Selecionar todas
+                  </button>
+                                          <button
+                          onClick={limparSelecao}
+                          className="flex-1 sm:flex-initial text-xs px-4 py-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                        >
+                          Limpar seleção
+                        </button>
+                      </div>
+
+                      {selecionadas.length > 0 && (
+                          <button
+                          onClick={() => setShowDisparoConfig(true)}
+                          disabled={!canLaunch}
+                          className="flex-1 sm:flex-initial text-xs px-4 py-2 bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                          <Play size={14} />
+                          Iniciar Disparo
+                          </button>
+                                )}
+                              </div>
+                        </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {empresasSegmento.map((empresa) => (
+                            <button 
+                        key={empresa.id}
+                        onClick={() => toggleSelecionada(empresa.id)}
+                        className={`
+                          relative overflow-hidden bg-background hover:bg-accent/5 border border-border 
+                          rounded-lg p-3 text-left transition-all duration-200
+                          ${selecionadas.includes(empresa.id) ? 'ring-2 ring-accent' : ''}
+                        `}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 bg-accent/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Building size={16} className="text-accent" />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-medium text-foreground truncate">
+                              {empresa.titulo}
+                            </h3>
+                            {empresa.endereco && (
+                              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                                <MapPin size={12} />
+                                <span className="truncate">{empresa.endereco}</span>
+                              </p>
+                            )}
+                            {empresa.website && (
+                              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                                <Globe size={12} />
+                                <a 
+                                  href={empresa.website} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-accent hover:underline truncate"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {empresa.website.replace(/^https?:\/\//, '')}
+                                </a>
+                              </p>
+                            )}
+                            {empresa.telefone && (
+                              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                                <Phone size={12} />
+                                <span className="truncate">{empresa.telefone}</span>
+                              </p>
+                          )}
+                        </div>
+                      </div>
+                  </button>
+                    ))}
+                </div>
+                  </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal de Configuração de Disparo */}
+      {showDisparoConfig && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background border border-border rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-semibold text-foreground">
+                  Configurar Disparo ({selecionadas.length} empresas)
+                </h2>
+                <button
+                  onClick={() => setShowDisparoConfig(false)}
+                  className="p-2 hover:bg-accent/10 rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-muted-foreground" />
+                </button>
+              </div>
+
+              {/* Seleção de Conexão WhatsApp */}
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-foreground mb-3">
+                  Selecione a conexão WhatsApp
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {connections.map((connection) => (
+                    <button
+                      key={connection.id}
+                      onClick={() => setSelectedConnection(connection.id)}
+                      className={`
+                        p-3 border border-border rounded-lg text-left transition-all duration-200
+                        ${selectedConnection === connection.id 
+                          ? 'ring-2 ring-accent bg-accent/5' 
+                          : 'hover:bg-accent/5'}
+                      `}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-accent/10 rounded-lg flex items-center justify-center">
+                          <MessageCircle size={16} className="text-accent" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-foreground">
+                            {connection.name}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            Status: {connection.status}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Seleção de Template */}
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-foreground mb-3">
+                  Selecione um template de mensagem
+                </h3>
+                <div className="space-y-3">
+                  {templates.map((template) => (
+                    <button
+                      key={template.id}
+                      onClick={() => {
+                        setSelectedTemplate(template.id);
+                        setCustomMessage(template.content);
+                      }}
+                      className={`
+                        w-full p-3 border border-border rounded-lg text-left transition-all duration-200
+                        ${selectedTemplate === template.id 
+                          ? 'ring-2 ring-accent bg-accent/5' 
+                          : 'hover:bg-accent/5'}
+                      `}
+                    >
+                      <h4 className="text-sm font-medium text-foreground mb-1">
+                        {template.name}
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        {template.preview}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Edição da Mensagem */}
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-foreground mb-3">
+                  Editar mensagem
+                </h3>
+                <textarea
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                  placeholder="Digite sua mensagem aqui..."
+                  rows={6}
+                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/40 resize-none"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {customMessage.length} caracteres
+                </p>
+              </div>
+
+              {/* Configurações Adicionais */}
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-foreground mb-3">
+                  Configurações do disparo
+                </h3>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-2">
+                      Nome da Campanha (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={nomeCampanha}
+                      onChange={(e) => setNomeCampanha(e.target.value)}
+                      placeholder="Ex: Prospecção Janeiro 2024"
+                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/40"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-2">
+                      Delay entre mensagens (segundos)
+                    </label>
+                    <input
+                      type="number"
+                      value={delay}
+                      onChange={(e) => setDelay(Number(e.target.value))}
+                      min="1"
+                      max="300"
+                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/40"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowDisparoConfig(false)}
+                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleLaunch}
+                  disabled={!selectedConnection || !customMessage.trim() || isLaunching}
+                  className="px-6 py-2 bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                >
+                  {isLaunching ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-accent-foreground/20 border-t-accent-foreground rounded-full animate-spin" />
+                      Agendando...
+                    </>
+                  ) : (
+                    <>
+                      <Play size={16} />
+                      Confirmar Disparo
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default DisparosPage; 

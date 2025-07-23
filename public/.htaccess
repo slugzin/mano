@@ -1,0 +1,157 @@
+# Apache .htaccess para aplicação React
+# Configurado para Hostinger e outros servidores Apache
+
+# Habilitar mod_rewrite
+RewriteEngine On
+
+# Redirecionar HTTP para HTTPS (recomendado para produção)
+# Descomente as linhas abaixo se quiser forçar HTTPS
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Redirecionar www para não-www (ou vice-versa, escolha um)
+# Descomente para redirecionar www.seudominio.com para seudominio.com
+# RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
+# RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
+
+# REDIRECIONAMENTO PARA MODELO PRINCIPAL
+# Redirecionar página inicial para perfil da modelo
+# Descomente a linha abaixo se quiser usar redirecionamento via .htaccess
+# RewriteRule ^$ /Camilaruivinhabb [R=301,L]
+
+# Configuração principal para React Router
+# Redirecionar todas as rotas para index.html (exceto arquivos existentes)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-l
+RewriteRule . /index.html [L]
+
+# Configurações de Cache para melhor performance
+<IfModule mod_expires.c>
+    ExpiresActive On
+    
+    # Cache para arquivos estáticos
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType application/x-javascript "access plus 1 year"
+    ExpiresByType text/javascript "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType application/pdf "access plus 1 year"
+    ExpiresByType font/woff "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType application/font-woff "access plus 1 year"
+    ExpiresByType application/font-woff2 "access plus 1 year"
+    
+    # Cache menor para HTML
+    ExpiresByType text/html "access plus 1 hour"
+    
+    # Cache para vídeos e mídia
+    ExpiresByType video/mp4 "access plus 1 month"
+    ExpiresByType video/webm "access plus 1 month"
+    ExpiresByType audio/mp3 "access plus 1 month"
+    ExpiresByType audio/mpeg "access plus 1 month"
+</IfModule>
+
+# Configurações de compressão GZIP
+<IfModule mod_deflate.c>
+    # Comprimir texto, HTML, JavaScript, CSS, XML
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/rss+xml
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript
+    AddOutputFilterByType DEFLATE application/json
+</IfModule>
+
+# Headers de segurança
+<IfModule mod_headers.c>
+    # Prevenir clickjacking
+    Header always append X-Frame-Options SAMEORIGIN
+    
+    # Prevenir MIME type sniffing
+    Header set X-Content-Type-Options nosniff
+    
+    # Habilitar proteção XSS
+    Header set X-XSS-Protection "1; mode=block"
+    
+    # Política de referrer
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    
+    # Cache control para arquivos estáticos
+    <FilesMatch "\.(css|js|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    
+    # Cache control para HTML
+    <FilesMatch "\.(html|htm)$">
+        Header set Cache-Control "public, max-age=3600"
+    </FilesMatch>
+</IfModule>
+
+# Configurações de MIME types
+<IfModule mod_mime.c>
+    # Fontes
+    AddType application/font-woff .woff
+    AddType application/font-woff2 .woff2
+    AddType application/vnd.ms-fontobject .eot
+    AddType application/x-font-ttf .ttf
+    
+    # Vídeos
+    AddType video/mp4 .mp4
+    AddType video/webm .webm
+    
+    # Outros
+    AddType application/json .json
+    AddType image/svg+xml .svg
+    AddType image/webp .webp
+</IfModule>
+
+# Bloquear acesso a arquivos sensíveis
+<FilesMatch "\.(htaccess|htpasswd|ini|log|sh|inc|bak|env)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Bloquear acesso a diretórios específicos
+RedirectMatch 404 /\.git
+RedirectMatch 404 /node_modules
+RedirectMatch 404 /src
+
+# Configurações específicas para stories
+# Permitir acesso direto a URLs de stories
+RewriteCond %{REQUEST_URI} ^/story/[a-zA-Z0-9\-]+/?$
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.html [L]
+
+# Configurações para API (se necessário)
+# Permitir CORS para APIs externas
+<IfModule mod_headers.c>
+    # Para requisições de API
+    SetEnvIf Origin "^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$" CORS_ALLOWED_ORIGIN=$0
+    Header always set Access-Control-Allow-Origin %{CORS_ALLOWED_ORIGIN}e env=CORS_ALLOWED_ORIGIN
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+    Header always set Access-Control-Allow-Credentials "true"
+</IfModule>
+
+# Otimizações específicas para Hostinger
+# Aumentar limites se necessário (pode precisar ajustar no painel da Hostinger)
+# php_value upload_max_filesize 50M
+# php_value post_max_size 50M
+# php_value max_execution_time 300
+# php_value max_input_vars 3000
+
+# Configuração de ErrorDocument personalizado (opcional)
+# ErrorDocument 404 /index.html
+# ErrorDocument 403 /index.html
+# ErrorDocument 500 /index.html 

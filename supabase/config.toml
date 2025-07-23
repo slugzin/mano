@@ -1,0 +1,14 @@
+[project]
+name = "prospect-crm"
+
+[auth]
+enabled = true
+
+[functions]
+enabled = true
+
+[storage]
+enabled = true
+
+[database]
+enabled = true 
