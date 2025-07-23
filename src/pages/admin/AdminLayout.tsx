@@ -217,13 +217,10 @@ const AdminLayout: React.FC = () => {
         </div>
       </aside>
 
-      {/* page-wrapper: Novo container para o conteúdo da página */}
-      <div className="flex flex-1 flex-col overflow-hidden md:ml-20">
-        {/* Main Content: Agora é o container com scroll */}
-        <main className="page-content-scrollable flex-1 overflow-y-auto overflow-x-hidden pb-16 md:pb-0">
-          <Outlet />
-        </main>
-      </div>
+      {/* Conteúdo principal agora ocupa o espaço e permite que o body role */}
+      <main className="flex-1 md:ml-20 p-2 md:p-6 pb-16 md:pb-6">
+        <Outlet />
+      </main>
 
       {/* Bottom Navigation Bar - Fica como está */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 

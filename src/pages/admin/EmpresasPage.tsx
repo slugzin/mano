@@ -324,8 +324,8 @@ const EmpresasPage: React.FC = () => {
   }
 
   return (
-    <div className="bg-background">
-      <div className="page-content-wrapper">
+    <div className="min-h-screen w-screen max-w-screen bg-background overflow-x-hidden">
+      <div className="w-full px-0">
         {/* Header Mobile */}
         <div className="md:hidden">
           {/* Título */}
@@ -609,11 +609,11 @@ const EmpresasPage: React.FC = () => {
         {/* Modal de Status (Mobile) */}
         {empresaSelecionada && (
           <div 
-            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 md:hidden"
+            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 md:hidden flex items-center justify-center p-4"
             onClick={() => setEmpresaSelecionada(null)}
           >
             <div 
-              className="fixed inset-x-0 bottom-0 bg-background border-t border-border p-4 space-y-4 animate-in slide-in-from-bottom duration-300"
+              className="bg-background border border-border p-4 space-y-4 rounded-xl w-full max-w-md animate-in fade-in duration-200"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-start justify-between mb-4">
@@ -653,7 +653,7 @@ const EmpresasPage: React.FC = () => {
                       {React.createElement(config.icon, { size: 16, className: config.text })}
                     </div>
                     <div className="flex-1 text-left">
-                      <p className={`text-sm font-medium ${empresaSelecionada.status === status ? config.text : 'text-foreground'}`}>
+                      <p className={`text-sm font-medium ${empresaSelecionada.status === status ? config.text : 'text-foreground'}`}> 
                         {statusLabels[status as keyof typeof statusLabels]}
                       </p>
                     </div>
@@ -676,7 +676,7 @@ const EmpresasPage: React.FC = () => {
           />
           
           {/* KPIs */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">

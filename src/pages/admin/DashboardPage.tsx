@@ -156,8 +156,8 @@ const DashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-2 md:p-6">
-      <div className="page-content-wrapper">
+    <div className="min-h-screen w-screen max-w-screen bg-background overflow-x-hidden">
+      <div className="w-full px-0">
         <PageHeader
           title="Dashboard"
           subtitle="Acompanhe suas métricas e acesse rapidamente as principais ações do seu CRM."
@@ -165,71 +165,71 @@ const DashboardPage: React.FC = () => {
         />
 
         {/* KPIs Principais */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 gap-2 mb-6 sm:grid-cols-2 lg:grid-cols-4 px-2 sm:px-0">
           {/* Empresas Buscadas */}
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                <Target size={20} className="text-emerald-500" />
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2 sm:p-3 md:p-4">
+            <div className="flex items-center gap-1 sm:gap-2 md:gap-3 mb-1 md:mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                <Target size={16} className="text-emerald-500 md:text-[20px]" />
               </div>
               <div>
-                <span className="text-2xl font-bold text-emerald-500">{stats?.totalEmpresas || 0}</span>
-                <span className="text-xs text-muted-foreground ml-2">empresas</span>
+                <span className="text-base sm:text-lg md:text-2xl font-bold text-emerald-500">{stats?.totalEmpresas || 0}</span>
+                <span className="text-xs text-muted-foreground ml-1">empresas</span>
               </div>
             </div>
-            <h3 className="text-sm font-medium text-foreground">Empresas Buscadas</h3>
-            <p className="text-xs text-muted-foreground mt-1">Total de empresas encontradas</p>
+            <h3 className="text-xs md:text-sm font-medium text-foreground">Empresas Buscadas</h3>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 md:mt-1">Total de empresas encontradas</p>
           </div>
 
           {/* Taxa de Resposta */}
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                <BarChart3 size={20} className="text-blue-500" />
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-2 sm:p-3 md:p-4">
+            <div className="flex items-center gap-1 sm:gap-2 md:gap-3 mb-1 md:mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                <BarChart3 size={16} className="text-blue-500 md:text-[20px]" />
               </div>
               <div>
-                <span className="text-2xl font-bold text-blue-500">0.0%</span>
-                <span className="text-xs text-muted-foreground ml-2">taxa</span>
+                <span className="text-base sm:text-lg md:text-2xl font-bold text-blue-500">0.0%</span>
+                <span className="text-xs text-muted-foreground ml-1">taxa</span>
               </div>
             </div>
-            <h3 className="text-sm font-medium text-foreground">Taxa de Resposta</h3>
-            <p className="text-xs text-muted-foreground mt-1">Média de respostas recebidas</p>
+            <h3 className="text-xs md:text-sm font-medium text-foreground">Taxa de Resposta</h3>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 md:mt-1">Média de respostas recebidas</p>
           </div>
 
           {/* Negócios Ganhos */}
-          <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                <Star size={20} className="text-purple-500" />
+          <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-2 sm:p-3 md:p-4">
+            <div className="flex items-center gap-1 sm:gap-2 md:gap-3 mb-1 md:mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                <Star size={16} className="text-purple-500 md:text-[20px]" />
               </div>
               <div>
-                <span className="text-2xl font-bold text-purple-500">1</span>
-                <span className="text-xs text-muted-foreground ml-2">negócios</span>
+                <span className="text-base sm:text-lg md:text-2xl font-bold text-purple-500">1</span>
+                <span className="text-xs text-muted-foreground ml-1">negócios</span>
               </div>
             </div>
-            <h3 className="text-sm font-medium text-foreground">Negócios Ganhos</h3>
-            <p className="text-xs text-muted-foreground mt-1">Conversões realizadas</p>
+            <h3 className="text-xs md:text-sm font-medium text-foreground">Negócios Ganhos</h3>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 md:mt-1">Conversões realizadas</p>
           </div>
 
           {/* Total de Disparos */}
-          <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
-                <MessageCircle size={20} className="text-orange-500" />
+          <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-2 sm:p-3 md:p-4">
+            <div className="flex items-center gap-1 sm:gap-2 md:gap-3 mb-1 md:mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
+                <MessageCircle size={16} className="text-orange-500 md:text-[20px]" />
               </div>
               <div>
-                <span className="text-2xl font-bold text-orange-500">{totalDisparos}</span>
-                <span className="text-xs text-muted-foreground ml-2">disparos</span>
+                <span className="text-base sm:text-lg md:text-2xl font-bold text-orange-500">{totalDisparos}</span>
+                <span className="text-xs text-muted-foreground ml-1">disparos</span>
               </div>
             </div>
-            <h3 className="text-sm font-medium text-foreground">Total de Disparos</h3>
-            <p className="text-xs text-muted-foreground mt-1">Mensagens enviadas</p>
+            <h3 className="text-xs md:text-sm font-medium text-foreground">Total de Disparos</h3>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 md:mt-1">Mensagens enviadas</p>
           </div>
         </div>
 
         {/* Últimos Disparos */}
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2 sm:gap-0">
             <h2 className="text-lg font-semibold text-foreground">Últimos Disparos</h2>
             <button
               onClick={() => navigate('/admin/campanhas')}
@@ -311,7 +311,7 @@ const DashboardPage: React.FC = () => {
         {/* Ações Rápidas */}
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-foreground mb-4">Ações Rápidas</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Buscar Leads */}
             <button
               onClick={() => navigate('/admin/leads')}
