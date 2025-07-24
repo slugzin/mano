@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Target,
   Users,
+  User,
   Phone,
   Grid,
   MessageCircle,
@@ -78,8 +79,8 @@ const AdminLayout: React.FC = () => {
     { icon: <LayoutDashboard size={20} />, label: 'Dash', path: '/admin' },
     { icon: <Target size={20} />, label: 'Leads', path: '/admin/leads' },
     { icon: <Rocket size={20} />, label: 'Disparos', path: '/admin/disparos' },
-    { icon: <Building size={20} />, label: 'Empresas', path: '/admin/empresas' },
-    { icon: <Clock size={20} />, label: 'Histórico', path: '/admin/campanhas' },
+    { icon: <MessageCircle size={20} />, label: 'Conversas', path: '/admin/conversas' },
+    { icon: <User size={20} />, label: 'Perfil', path: '/admin/perfil' },
   ];
 
   return (
@@ -217,17 +218,17 @@ const AdminLayout: React.FC = () => {
         </div>
       </aside>
 
-      {/* Conteúdo principal agora ocupa o espaço e permite que o body role */}
-      <main className="flex-1 md:ml-20 p-2 md:p-6 pb-16 md:pb-6">
+      {/* Conteúdo principal com scroll corrigido para iOS */}
+      <main className="flex-1 md:ml-20 p-2 md:p-6 pb-16 md:pb-6 min-h-0 overflow-y-auto">
         <Outlet />
       </main>
 
-      {/* Bottom Navigation Bar - Fica como está */}
+      {/* Bottom Navigation Bar - Ajustada para 5 itens */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 
         bg-card/95 backdrop-blur-lg border-t border-border
         z-50 h-16
       ">
-        <div className="flex justify-between items-center h-full px-2">
+        <div className="flex justify-around items-center h-full px-1">
           {bottomNavItems.map((item, index) => (
             <Link
               key={index}
@@ -236,11 +237,11 @@ const AdminLayout: React.FC = () => {
                 flex flex-col items-center justify-center
                 ${location.pathname === item.path ? 'text-primary' : 'text-muted-foreground'}
                 transition-colors duration-200 hover:text-primary
-                w-16 h-full
+                flex-1 h-full min-w-0
               `}
             >
               {item.icon}
-              <span className="text-[10px] mt-0.5 font-medium">{item.label}</span>
+              <span className="text-[9px] mt-0.5 font-medium truncate">{item.label}</span>
             </Link>
           ))}
         </div>

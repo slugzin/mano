@@ -9,6 +9,29 @@ html, body, #root {
   /* Melhora a renderização de fontes */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Corrige problemas de scroll no iOS */
+  -webkit-overflow-scrolling: touch;
+  overflow-x: hidden;
+}
+
+/* Corrige problemas específicos do iOS */
+@supports (-webkit-touch-callout: none) {
+  html, body {
+    /* Previne zoom e melhora scroll no iOS */
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Corrige altura da viewport no iOS */
+  body {
+    min-height: -webkit-fill-available;
+  }
+  
+  /* Garante que o scroll funcione corretamente */
+  .overflow-auto, .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
 }
 
 body {
@@ -304,6 +327,25 @@ button, a, [role="button"] {
     -webkit-appearance: none;
     appearance: none;
     border-radius: 0;
+    /* Desabilitar zoom no mobile */
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  
+  /* Desabilitar zoom em todos os elementos */
+  * {
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  
+  /* Prevenir zoom duplo toque */
+  html, body {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Melhorar performance de scroll */
@@ -342,6 +384,26 @@ button, a, [role="button"] {
   padding-right: 1rem;
 }
 
+/* Garantir alinhamento centralizado */
+.dashboard-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Forçar centralização em todas as páginas */
+body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+#root {
+  width: 100%;
+  overflow-x: hidden;
+}
+
 @media (min-width: 640px) {
   .page-content-wrapper {
     padding-left: 1.5rem;
@@ -374,5 +436,169 @@ html {
     backface-visibility: hidden;
     perspective: 1000;
     will-change: transform;
+  }
+}
+
+/* Correções específicas para scroll no iOS */
+@media (max-width: 768px) {
+  /* Garante que o conteúdo principal tenha altura adequada */
+  .page-content-wrapper {
+    min-height: calc(100vh - 4rem); /* 4rem = altura da bottom nav */
+    padding-bottom: 5rem; /* Espaço extra para bottom nav */
+  }
+  
+  /* Corrige problemas de scroll em containers */
+  .overflow-auto, .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    /* Previne que o scroll pare no meio */
+    scroll-behavior: smooth;
+  }
+  
+  /* Garante que modais não interfiram no scroll */
+  .fixed {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Desabilitar scroll de fundo quando modal está aberto */
+  body.modal-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    /* iOS específico */
+    -webkit-overflow-scrolling: auto;
+    overscroll-behavior: none;
+  }
+  
+  /* Prevenir scroll no container principal quando modal está aberto */
+  .overflow-hidden {
+    overflow: hidden !important;
+    /* iOS específico */
+    -webkit-overflow-scrolling: auto;
+    overscroll-behavior: none;
+  }
+  
+  /* iOS: Forçar desabilitação de scroll */
+  @supports (-webkit-touch-callout: none) {
+    body.modal-open {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      -webkit-overflow-scrolling: auto;
+    }
+    
+    body.modal-open * {
+      -webkit-overflow-scrolling: auto;
+    }
+  }
+  
+  /* Modal de conversa: centralização e espaçamento */
+  .conversa-modal {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+  }
+  
+  /* Mobile: ajustar espaçamento da barra de menu */
+  @media (max-width: 768px) {
+    .conversa-modal {
+      margin-top: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+  }
+  
+  /* Corrige altura de elementos flex no iOS */
+  .flex-1 {
+    min-height: 0;
+  }
+  
+  /* Previne que elementos fiquem cortados */
+  .min-h-full {
+    min-height: calc(100vh - 4rem);
+  }
+}
+
+/* Correções específicas para iOS Safari */
+@supports (-webkit-touch-callout: none) {
+  /* Corrige altura da viewport no iOS */
+  .min-h-full {
+    min-height: -webkit-fill-available;
+  }
+  
+  /* Garante que o scroll funcione até o final */
+  body {
+    position: relative;
+  }
+  
+  /* Corrige problemas de scroll em listas */
+  .space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+  
+  /* Previne que elementos fiquem fora da tela */
+  .max-w-7xl {
+    max-width: 100%;
+  }
+  
+  /* Garante que o conteúdo principal tenha scroll adequado */
+  main {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  
+  /* Corrige problemas de scroll em containers específicos */
+  .page-content-wrapper {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  
+  /* Previne que o scroll pare no meio */
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+  }
+  
+  /* Garante que elementos flex tenham altura adequada */
+  .flex-1 {
+    min-height: 0;
+  }
+  
+  /* Corrige problemas de viewport no iOS */
+  html {
+    height: -webkit-fill-available;
+  }
+  
+  body {
+    min-height: -webkit-fill-available;
+  }
+  
+  /* Desabilitar zoom completamente no iOS */
+  html, body {
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Prevenir zoom em todos os elementos */
+  * {
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  
+  /* Prevenir zoom duplo toque */
+  input, textarea, select, button, a {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
 }

@@ -26,6 +26,7 @@ import { KanbanBoard } from '../../components/kanban/KanbanBoard';
 import FiltrosAtivosBanner from '../../components/ui/FiltrosAtivosBanner';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
+import LoadingScreen from '../../components/ui/LoadingScreen';
 
 // Cores compatíveis com dark theme usando CSS variables
 const statusColors = {
@@ -307,227 +308,142 @@ const EmpresasPage: React.FC = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-            className="w-16 h-16 mx-auto mb-4"
-          >
-            <Building size={64} className="text-accent" />
-          </motion.div>
-          <p className="text-muted-foreground text-lg">Carregando empresas...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen page="empresas" />;
   }
 
   return (
-    <div className="min-h-screen w-screen max-w-screen bg-background overflow-x-hidden">
-      <div className="w-full px-0">
+    <div className="min-h-full bg-background p-2 md:p-6">
+      <div className="page-content-wrapper">
         {/* Header Mobile */}
         <div className="md:hidden">
-          {/* Título */}
-          <div className="flex items-center gap-3 p-4 border-b border-border">
-            <Building className="text-primary" size={24} />
-            <h1 className="text-lg font-medium text-foreground">Empresas</h1>
+          <div className="flex items-center gap-3 p-3 border-b border-border bg-background">
+            <Building className="text-primary" size={20} />
+            <div>
+              <h1 className="text-base font-medium text-foreground">Empresas</h1>
+              <p className="text-xs text-muted-foreground">Gerencie suas empresas</p>
+            </div>
           </div>
 
-          {/* Stats Mobile - Corrigidas para dark theme */}
-          <div className="p-4 border-b border-border">
-            <div className="flex items-center justify-between mb-4">
+          {/* Stats Mobile - Estilizado */}
+          <div className="p-3 border-b border-border bg-gradient-to-br from-background to-muted/20">
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="text-sm text-muted-foreground">Total de Empresas</p>
-                <p className="text-2xl font-bold text-foreground">{empresasFiltradas.length}</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total de Empresas</p>
+                <p className="text-2xl font-bold text-foreground bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
+                  {empresasFiltradas.length}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center">
+                <Building size={20} className="text-accent" />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className={`${statusColors.a_contatar.bg} ${statusColors.a_contatar.border} border rounded-lg p-2`}>
-                <p className={`text-xs font-medium ${statusColors.a_contatar.text}`}>A Contatar</p>
-                <p className="text-sm font-bold text-foreground mt-1">
+            
+            {/* Filtros Rápidos */}
+            <div className="mb-3">
+              <p className="text-xs text-muted-foreground font-medium mb-2">Filtrar por Status</p>
+              <div className="grid grid-cols-3 gap-1">
+                <button
+                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: [] }))}
+                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
+                    filtrosAvancados.status.length === 0
+                      ? 'bg-accent text-accent-foreground shadow-sm'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Todas ({empresasFiltradas.length})
+                </button>
+                <button
+                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['a_contatar'] }))}
+                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
+                    filtrosAvancados.status.includes('a_contatar')
+                      ? 'bg-emerald-500 text-white shadow-sm'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  A Contatar ({empresasFiltradas.filter(e => e.status === 'a_contatar').length})
+                </button>
+                <button
+                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['contato_realizado'] }))}
+                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
+                    filtrosAvancados.status.includes('contato_realizado')
+                      ? 'bg-blue-500 text-white shadow-sm'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Realizados ({empresasFiltradas.filter(e => e.status === 'contato_realizado').length})
+                </button>
+                <button
+                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['em_negociacao'] }))}
+                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
+                    filtrosAvancados.status.includes('em_negociacao')
+                      ? 'bg-purple-500 text-white shadow-sm'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Negociação ({empresasFiltradas.filter(e => e.status === 'em_negociacao').length})
+                </button>
+                <button
+                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['ganhos'] }))}
+                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
+                    filtrosAvancados.status.includes('ganhos')
+                      ? 'bg-green-500 text-white shadow-sm'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Ganhos ({empresasFiltradas.filter(e => e.status === 'ganhos').length})
+                </button>
+                <button
+                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['perdidos'] }))}
+                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
+                    filtrosAvancados.status.includes('perdidos')
+                      ? 'bg-red-500 text-white shadow-sm'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Perdidos ({empresasFiltradas.filter(e => e.status === 'perdidos').length})
+                </button>
+              </div>
+            </div>
+
+            {/* Cards de Status Estilizados */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className={`${statusColors.a_contatar.bg} ${statusColors.a_contatar.border} border rounded-xl p-1.5 shadow-sm`}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <div className={`w-2 h-2 rounded-full ${statusColors.a_contatar.text.replace('text-', 'bg-')}`}></div>
+                  <p className={`text-xs font-semibold ${statusColors.a_contatar.text}`}>A Contatar</p>
+                </div>
+                <p className="text-base font-bold text-foreground">
                   {empresasFiltradas.filter(e => e.status === 'a_contatar').length}
                 </p>
               </div>
-              <div className={`${statusColors.contato_realizado.bg} ${statusColors.contato_realizado.border} border rounded-lg p-2`}>
-                <p className={`text-xs font-medium ${statusColors.contato_realizado.text}`}>Realizados</p>
-                <p className="text-sm font-bold text-foreground mt-1">
+              <div className={`${statusColors.contato_realizado.bg} ${statusColors.contato_realizado.border} border rounded-xl p-1.5 shadow-sm`}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <div className={`w-2 h-2 rounded-full ${statusColors.contato_realizado.text.replace('text-', 'bg-')}`}></div>
+                  <p className={`text-xs font-semibold ${statusColors.contato_realizado.text}`}>Realizados</p>
+                </div>
+                <p className="text-base font-bold text-foreground">
                   {empresasFiltradas.filter(e => e.status === 'contato_realizado').length}
-                </p>
-              </div>
-              <div className={`${statusColors.em_negociacao.bg} ${statusColors.em_negociacao.border} border rounded-lg p-2`}>
-                <p className={`text-xs font-medium ${statusColors.em_negociacao.text}`}>Negociação</p>
-                <p className="text-sm font-bold text-foreground mt-1">
-                  {empresasFiltradas.filter(e => e.status === 'em_negociacao').length}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Filtros Avançados Mobile */}
-          <div className="border-b border-border">
-            <button
-              onClick={() => setShowFiltrosAvancados(!showFiltrosAvancados)}
-              className="w-full flex items-center justify-between p-4 hover:bg-accent/5 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-1.5 bg-accent rounded-lg">
-                  <Filter size={14} className="text-accent-foreground" />
-                </div>
-                <div className="text-left">
-                  <h3 className="text-sm font-medium text-foreground">Filtros</h3>
-                  {temFiltrosAtivos() && (
-                    <p className="text-xs text-accent font-medium">
-                      {[
-                        filtrosAvancados.status.length > 0 && `${filtrosAvancados.status.length} status`,
-                        filtrosAvancados.apenasComWhatsApp && 'WhatsApp',
-                        filtrosAvancados.apenasComWebsite && 'Website',
-                        filtros.busca && 'Busca'
-                      ].filter(Boolean).join(' • ')}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {temFiltrosAtivos() && (
-                  <div className="w-2 h-2 bg-accent rounded-full"></div>
-                )}
-                <ChevronDown 
-                  size={16} 
-                  className={`text-accent transition-transform duration-200 ${
-                    showFiltrosAvancados ? 'rotate-180' : ''
-                  }`}
-                />
-              </div>
-            </button>
-
-            <AnimatePresence>
-              {showFiltrosAvancados && (
-                <motion.div
-                  initial={{ height: 0 }}
-                  animate={{ height: 'auto' }}
-                  exit={{ height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="p-4 space-y-6 border-t border-border bg-muted/20">
-                    {/* Busca - Compacta */}
-                    <div>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          placeholder="Buscar empresas..."
-                          value={filtros.busca}
-                          onChange={(e) => setFiltros(prev => ({ ...prev, busca: e.target.value }))}
-                          className="w-full bg-background border-2 border-border focus:border-accent rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none transition-colors placeholder:text-muted-foreground"
-                        />
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      </div>
-                    </div>
-
-                    {/* Status - Grid Compacto */}
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground mb-3 block uppercase tracking-wide">Status das Empresas</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {Object.entries(statusLabels).slice(0, 4).map(([status, label]) => (
-                          <button
-                            key={status}
-                            onClick={() => toggleStatusFilter(status)}
-                            className={`flex items-center gap-2 p-3 rounded-xl text-xs transition-all border-2 font-medium ${
-                              filtrosAvancados.status.includes(status)
-                                ? 'bg-accent text-accent-foreground border-accent shadow-sm'
-                                : 'bg-background border-border text-muted-foreground hover:border-accent/50 hover:text-foreground'
-                            }`}
-                          >
-                            {React.createElement(statusColors[status as keyof typeof statusColors].icon, { 
-                              size: 14,
-                              className: filtrosAvancados.status.includes(status) ? 'text-accent-foreground' : ''
-                            })}
-                            <span className="truncate">{label.split(' ')[0]}</span>
-                            {filtrosAvancados.status.includes(status) && <Check size={12} className="ml-auto" />}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Informações de Contato - Mais Visual */}
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground mb-3 block uppercase tracking-wide">Tipo de Contato</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { key: 'apenasComWhatsApp', label: 'WhatsApp', icon: MessageCircle, color: 'text-green-600' },
-                          { key: 'apenasComWebsite', label: 'Website', icon: Globe, color: 'text-blue-600' },
-                          { key: 'apenasComTelefone', label: 'Telefone', icon: Phone, color: 'text-purple-600' },
-                          { key: 'apenasComEndereco', label: 'Endereço', icon: MapPin, color: 'text-orange-600' }
-                        ].map(({ key, label, icon: Icon, color }) => (
-                          <button
-                            key={key}
-                            onClick={() => setFiltrosAvancados(prev => ({
-                              ...prev,
-                              [key]: !prev[key as keyof FiltrosAvancados]
-                            }))}
-                            className={`flex items-center gap-2 p-3 rounded-xl text-xs transition-all border-2 font-medium ${
-                              filtrosAvancados[key as keyof FiltrosAvancados]
-                                ? 'bg-accent text-accent-foreground border-accent shadow-sm'
-                                : 'bg-background border-border text-muted-foreground hover:border-accent/50 hover:text-foreground'
-                            }`}
-                          >
-                            <Icon 
-                              size={14} 
-                              className={filtrosAvancados[key as keyof FiltrosAvancados] ? 'text-accent-foreground' : color} 
-                            />
-                            <span className="truncate">{label}</span>
-                            {filtrosAvancados[key as keyof FiltrosAvancados] && <Check size={12} className="ml-auto" />}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Avaliação - Compacta */}
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground mb-3 block uppercase tracking-wide">Avaliação Máxima (filtrar baixas)</label>
-                      <select
-                        value={filtrosAvancados.avaliacaoMinima}
-                        onChange={(e) => setFiltrosAvancados(prev => ({
-                          ...prev,
-                          avaliacaoMinima: Number(e.target.value)
-                        }))}
-                        className="w-full px-4 py-3 text-sm bg-background border-2 border-border focus:border-accent rounded-xl focus:outline-none transition-colors"
-                      >
-                        <option value={0}>Todas as avaliações</option>
-                        <option value={4.9}>⭐ Até 4.9 estrelas</option>
-                        <option value={4.6}>⭐ Até 4.6 estrelas</option>
-                        <option value={4.4}>⭐ Até 4.4 estrelas</option>
-                        <option value={4.1}>⭐ Até 4.1 estrelas</option>
-                        <option value={3.5}>⭐ Até 3.5 estrelas</option>
-                        <option value={3.0}>⭐ Até 3.0 estrelas</option>
-                        <option value={2.0}>⭐ Até 2.0 estrelas</option>
-                        <option value={1.0}>⭐ Até 1.0 estrelas</option>
-                      </select>
-                    </div>
-
-                    {/* Ações - Mais Visível */}
-                    {temFiltrosAtivos() && (
-                      <div className="pt-4 border-t border-border flex justify-between items-center">
-                        <div className="text-xs text-muted-foreground">
-                          <span className="font-medium text-accent">{empresasFiltradas.length}</span> empresas encontradas
-                        </div>
-                        <button
-                          onClick={limparFiltros}
-                          className="px-4 py-2 text-xs text-accent hover:text-accent-foreground hover:bg-accent rounded-lg transition-colors flex items-center gap-2 font-medium"
-                        >
-                          <X size={12} />
-                          Limpar
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+          {/* Busca Simples */}
+          <div className="p-3 border-b border-border bg-muted/10">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Buscar empresas..."
+                value={filtros.busca}
+                onChange={(e) => setFiltros(prev => ({ ...prev, busca: e.target.value }))}
+                className="w-full bg-background border-2 border-border focus:border-accent rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none transition-colors placeholder:text-muted-foreground"
+              />
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            </div>
           </div>
 
           {/* Lista de Empresas */}
-          <div className="px-4 space-y-2 pb-4">
+          <div className="px-3 space-y-1.5 pb-4">
             {empresasFiltradas.length === 0 ? (
               <div className="text-center py-12">
                 <Building className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -541,9 +457,9 @@ const EmpresasPage: React.FC = () => {
                 {!temFiltrosAtivos() && (
                   <button
                     onClick={() => navigate('/admin/leads')}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-accent hover:bg-accent/90 text-accent-foreground rounded-xl font-medium transition-colors shadow-sm text-sm"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-accent hover:bg-accent/90 text-accent-foreground rounded-xl font-medium transition-colors shadow-sm text-sm"
                   >
-                    <Target size={18} />
+                    <Target size={16} />
                     Buscar Empresas
                   </button>
                 )}
@@ -553,17 +469,17 @@ const EmpresasPage: React.FC = () => {
                 <button
                   key={empresa.id}
                   onClick={() => setEmpresaSelecionada(empresa)}
-                  className="w-full bg-card hover:bg-accent/5 border border-border rounded-lg p-4 text-left transition-colors"
+                  className="w-full bg-card hover:bg-accent/5 border border-border rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-all duration-200 group"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className={`w-8 h-8 ${statusColors[empresa.status as keyof typeof statusColors].bg} ${statusColors[empresa.status as keyof typeof statusColors].border} border rounded-lg flex items-center justify-center flex-shrink-0`}>
+                  <div className="flex items-start gap-3 md:gap-4">
+                    <div className={`w-10 h-10 md:w-8 md:h-8 ${statusColors[empresa.status as keyof typeof statusColors].bg} ${statusColors[empresa.status as keyof typeof statusColors].border} border rounded-lg flex items-center justify-center flex-shrink-0`}>
                       {React.createElement(statusColors[empresa.status as keyof typeof statusColors].icon, {
-                        size: 16,
+                        size: 18,
                         className: statusColors[empresa.status as keyof typeof statusColors].text
                       })}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-sm font-medium text-foreground">
+                      <h3 className="text-sm font-medium text-foreground line-clamp-2 leading-tight">
                         {empresa.titulo}
                       </h3>
                       <p className={`text-xs ${statusColors[empresa.status as keyof typeof statusColors].text} mt-1`}>
@@ -571,34 +487,34 @@ const EmpresasPage: React.FC = () => {
                       </p>
                       
                       {/* Badges de informações */}
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                         {empresa.avaliacao && (
                           <div className="flex items-center gap-1">
-                            <Star size={12} className="text-yellow-400 fill-yellow-400" />
+                            <Star size={11} className="text-yellow-400 fill-yellow-400" />
                             <span className="text-xs text-muted-foreground">{empresa.avaliacao}</span>
                           </div>
                         )}
                         {isWhatsApp(empresa.telefone) && (
                           <div className="flex items-center gap-1 text-green-600">
-                            <MessageCircle size={12} />
+                            <MessageCircle size={11} />
                             <span className="text-xs">WhatsApp</span>
                           </div>
                         )}
                         {empresa.website && (
                           <div className="flex items-center gap-1 text-blue-600">
-                            <Globe size={12} />
+                            <Globe size={11} />
                             <span className="text-xs">Site</span>
                           </div>
                         )}
                       </div>
                       
                       {empresa.endereco && (
-                        <p className="text-xs text-muted-foreground mt-1 truncate">
+                        <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">
                           {empresa.endereco}
                         </p>
                       )}
                     </div>
-                    <ChevronRight size={16} className="text-muted-foreground" />
+                    <ChevronRight size={14} className="md:w-4 md:h-4 text-muted-foreground group-hover:text-accent transition-colors flex-shrink-0" />
                   </div>
                 </button>
               ))
@@ -609,11 +525,11 @@ const EmpresasPage: React.FC = () => {
         {/* Modal de Status (Mobile) */}
         {empresaSelecionada && (
           <div 
-            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 md:hidden flex items-center justify-center p-4"
+            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 md:hidden flex items-center justify-center p-2"
             onClick={() => setEmpresaSelecionada(null)}
           >
             <div 
-              className="bg-background border border-border p-4 space-y-4 rounded-xl w-full max-w-md animate-in fade-in duration-200"
+              className="bg-background border border-border p-3 space-y-4 rounded-xl w-full max-w-md animate-in fade-in duration-200"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-start justify-between mb-4">
@@ -642,7 +558,7 @@ const EmpresasPage: React.FC = () => {
                       setEmpresaSelecionada(null);
                     }}
                     className={`
-                      w-full flex items-center gap-3 p-4 rounded-lg transition-colors border
+                      w-full flex items-center gap-3 p-3 rounded-lg transition-colors border
                       ${empresaSelecionada.status === status 
                         ? `${config.bg} ${config.border} ${config.text}` 
                         : 'hover:bg-accent/5 border-border'
@@ -668,7 +584,7 @@ const EmpresasPage: React.FC = () => {
         )}
 
         {/* Layout Desktop */}
-        <div className="hidden md:block p-6">
+        <div className="hidden md:block">
           <PageHeader
             title="Empresas"
             subtitle="Gerencie e acompanhe o status das empresas."
@@ -735,7 +651,7 @@ const EmpresasPage: React.FC = () => {
           </div>
 
           {/* Kanban Board */}
-          <div className="bg-card border border-border rounded-xl p-4">
+          <div className="bg-card border border-border rounded-xl p-3 md:p-4">
             <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-accent/30 scrollbar-track-transparent">
               <div className="min-w-[900px]">
                 <KanbanBoard empresas={empresasFiltradas} />

@@ -25,6 +25,7 @@ import { templateService, MessageTemplate } from '../../services/templateService
 import { supabase } from '../../lib/supabase';
 import { useFiltros } from '../../contexts/FiltrosContext';
 import PageHeader from '../../components/ui/PageHeader';
+import LoadingScreen from '../../components/ui/LoadingScreen';
 
 interface KanbanSegment {
   id: string;
@@ -95,14 +96,14 @@ const DisparosPage: React.FC = () => {
   const [cidadesDisponiveis, setCidadesDisponiveis] = useState<string[]>([]);
   const [categoriasDisponiveis, setCategoriasDisponiveis] = useState<string[]>([]);
   
-  // Modal de configuração
+  // Modal de configuração - Wizard por etapas
   const [showDisparoConfig, setShowDisparoConfig] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1); // 1: Conexão, 2: Mensagem
   const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
   const [customMessage, setCustomMessage] = useState('');
-  const [nomeCampanha, setNomeCampanha] = useState('');
   const [delay, setDelay] = useState(30);
   const [isLaunching, setIsLaunching] = useState(false);
   const [empresaVindaDoKanban, setEmpresaVindaDoKanban] = useState<any>(null);
@@ -116,21 +117,65 @@ const DisparosPage: React.FC = () => {
     tempoEstimado: string;
   } | null>(null);
 
-  // Efeito para controlar o scroll do container principal quando o modal está aberto
+  // Efeito para controlar o scroll e barra de navegação quando o modal está aberto
   useEffect(() => {
-    const scrollableContent = document.querySelector('.page-content-scrollable');
-    if (scrollableContent) {
-      if (showDisparoConfig) {
-        scrollableContent.classList.add('overflow-hidden');
-      } else {
-        scrollableContent.classList.remove('overflow-hidden');
+    if (showDisparoConfig) {
+      // Desabilitar scroll do body no mobile e iOS
+      if (window.innerWidth <= 768 || /iPad|iPhone|iPod/.test(navigator.userAgent)) {
+        document.body.classList.add('modal-open');
+        // Ocultar barra de navegação mobile apenas no mobile
+        if (window.innerWidth <= 768) {
+          const bottomNav = document.querySelector('nav.md\\:hidden');
+          if (bottomNav) {
+            (bottomNav as HTMLElement).style.display = 'none';
+          }
+        }
+        // iOS específico: forçar posição fixa
+        if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+          document.body.style.position = 'fixed';
+          document.body.style.top = '0';
+          document.body.style.left = '0';
+          document.body.style.right = '0';
+          document.body.style.bottom = '0';
+        }
+      }
+    } else {
+      // Reabilitar scroll do body
+      document.body.classList.remove('modal-open');
+      // Mostrar barra de navegação mobile novamente apenas no mobile
+      if (window.innerWidth <= 768) {
+        const bottomNav = document.querySelector('nav.md\\:hidden');
+        if (bottomNav) {
+          (bottomNav as HTMLElement).style.display = '';
+        }
+      }
+      // iOS específico: remover posição fixa
+      if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        document.body.style.bottom = '';
       }
     }
 
     // Função de limpeza
     return () => {
-      if (scrollableContent) {
-        scrollableContent.classList.remove('overflow-hidden');
+      document.body.classList.remove('modal-open');
+      // Mostrar barra de navegação mobile novamente apenas no mobile
+      if (window.innerWidth <= 768) {
+        const bottomNav = document.querySelector('nav.md\\:hidden');
+        if (bottomNav) {
+          (bottomNav as HTMLElement).style.display = '';
+        }
+      }
+      // iOS específico: remover posição fixa
+      if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        document.body.style.bottom = '';
       }
     };
   }, [showDisparoConfig]);
@@ -156,6 +201,25 @@ const DisparosPage: React.FC = () => {
         setSelecionadas([empresa.id]);
       }, 1000);
     }
+
+    // Cleanup: garantir que a barra de navegação e scroll sejam restaurados ao desmontar
+    return () => {
+      document.body.classList.remove('modal-open');
+      if (window.innerWidth <= 768) {
+        const bottomNav = document.querySelector('nav.md\\:hidden');
+        if (bottomNav) {
+          (bottomNav as HTMLElement).style.display = '';
+        }
+      }
+      // iOS específico: remover posição fixa
+      if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        document.body.style.bottom = '';
+      }
+    };
   }, []);
 
   // Recarregar quando modalidade ou filtros mudarem
@@ -168,15 +232,29 @@ const DisparosPage: React.FC = () => {
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      // Carregar modalidades
+      // Carregar modalidades ordenadas por data mais recente
       const { data: empresasData } = await supabase
         .from('empresas')
-        .select('pesquisa')
-        .not('pesquisa', 'is', null);
+        .select('pesquisa, capturado_em')
+        .not('pesquisa', 'is', null)
+        .order('capturado_em', { ascending: false });
 
       if (empresasData) {
-        const modalidadesUnicas = [...new Set(empresasData.map(e => e.pesquisa))];
-      setModalidades(modalidadesUnicas);
+        // Criar mapa de modalidade -> data mais recente
+        const modalidadeDates = new Map<string, Date>();
+        empresasData.forEach(e => {
+          const data = new Date(e.capturado_em);
+          if (!modalidadeDates.has(e.pesquisa) || data > modalidadeDates.get(e.pesquisa)!) {
+            modalidadeDates.set(e.pesquisa, data);
+          }
+        });
+        
+        // Ordenar modalidades por data mais recente
+        const modalidadesOrdenadas = [...modalidadeDates.keys()].sort((a, b) => 
+          modalidadeDates.get(b)!.getTime() - modalidadeDates.get(a)!.getTime()
+        );
+        
+        setModalidades(modalidadesOrdenadas);
       }
 
       // Carregar cidades e categorias para filtros
@@ -231,20 +309,6 @@ const DisparosPage: React.FC = () => {
   const aplicarFiltros = (empresas: any[]) => {
     let empresasFiltradas = [...empresas];
 
-    // Filtros de contato
-    if (filtrosAvancados.apenasComWhatsApp) {
-        empresasFiltradas = empresasFiltradas.filter(e => e.telefone);
-      }
-    if (filtrosAvancados.apenasComSite) {
-      empresasFiltradas = empresasFiltradas.filter(e => e.website);
-    }
-    if (filtrosAvancados.apenasComTelefone) {
-      empresasFiltradas = empresasFiltradas.filter(e => e.telefone);
-    }
-    if (filtrosAvancados.apenasComEndereco) {
-        empresasFiltradas = empresasFiltradas.filter(e => e.endereco);
-      }
-
     // Filtros de avaliação
     if (filtrosAvancados.avaliacaoMaxima < 5) {
         empresasFiltradas = empresasFiltradas.filter(e => 
@@ -271,23 +335,8 @@ const DisparosPage: React.FC = () => {
       });
     }
 
-    if (filtrosAvancados.categoriasSelecionadas.length > 0) {
-      empresasFiltradas = empresasFiltradas.filter(e => 
-        filtrosAvancados.categoriasSelecionadas.includes(e.categoria)
-      );
-      }
-
-    // Ordenação
-    switch (filtrosAvancados.ordenacao) {
-      case 'avaliacao':
-        empresasFiltradas.sort((a, b) => (b.avaliacao || 0) - (a.avaliacao || 0));
-        break;
-      case 'avaliacoes_count':
-        empresasFiltradas.sort((a, b) => (b.total_avaliacoes || 0) - (a.total_avaliacoes || 0));
-        break;
-      default:
-        empresasFiltradas.sort((a, b) => new Date(b.capturado_em).getTime() - new Date(a.capturado_em).getTime());
-    }
+    // Ordenação padrão por data mais recente
+    empresasFiltradas.sort((a, b) => new Date(b.capturado_em).getTime() - new Date(a.capturado_em).getTime());
 
     return empresasFiltradas;
   };
@@ -381,6 +430,65 @@ const DisparosPage: React.FC = () => {
     });
   };
 
+  // Função para gerar nome da campanha automaticamente
+  const generateCampaignName = async (modalidade: string): Promise<string> => {
+    try {
+      // Buscar campanhas existentes com o mesmo padrão
+      const { data: existingCampaigns, error } = await supabase
+        .from('campanhas_disparo')
+        .select('nome')
+        .ilike('nome', `Campanha ${modalidade} %`);
+
+      if (error) {
+        console.error('Erro ao buscar campanhas:', error);
+        return `Campanha ${modalidade} 1`;
+      }
+
+      // Encontrar o próximo número disponível
+      const numbers = existingCampaigns
+        ?.map(campaign => {
+          const match = campaign.nome.match(new RegExp(`Campanha ${modalidade} (\\d+)`));
+          return match ? parseInt(match[1]) : 0;
+        })
+        .filter(num => num > 0) || [];
+
+      const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+      return `Campanha ${modalidade} ${nextNumber}`;
+    } catch (error) {
+      console.error('Erro ao gerar nome da campanha:', error);
+      return `Campanha ${modalidade} 1`;
+    }
+  };
+
+  // Funções do wizard
+  const nextStep = () => {
+    if (currentStep < 2) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const resetWizard = () => {
+    setCurrentStep(1);
+    setSelectedConnection(null);
+    setCustomMessage('');
+    setSelectedTemplate(null);
+    setDelay(30);
+  };
+
+  const canProceedToStep2 = () => {
+    return selectedConnection !== null;
+  };
+
+  const canFinishWizard = () => {
+    return customMessage.trim().length > 0;
+  };
+
   const handleLaunch = async () => {
     if (!selectedConnection || !customMessage.trim()) return;
     
@@ -391,6 +499,9 @@ const DisparosPage: React.FC = () => {
     setShowDispatchAnimation(true);
     
     try {
+      // Gerar nome da campanha automaticamente
+      const nomeCampanha = await generateCampaignName(modalidadeSelecionada || 'Geral');
+      
       const { data, error } = await supabase.rpc('agendar_disparos', {
         p_empresa_ids: selecionadas,
         p_mensagem: customMessage,
@@ -398,7 +509,7 @@ const DisparosPage: React.FC = () => {
         p_tipo_midia: 'nenhum',
         p_midia_url: null,
         p_delay_segundos: delay,
-        p_nome_campanha: nomeCampanha.trim() || null
+        p_nome_campanha: nomeCampanha
       });
 
       if (error) throw error;
@@ -436,7 +547,6 @@ const DisparosPage: React.FC = () => {
           setSelectedSegment(null);
           setSelectedConnection(null);
           setCustomMessage('');
-          setNomeCampanha('');
         setSelecionadas([]);
 
       } else {
@@ -450,58 +560,48 @@ const DisparosPage: React.FC = () => {
   };
 
   const temFiltrosAtivos = () => {
-    return filtrosAvancados.apenasComWhatsApp ||
-           filtrosAvancados.apenasComSite ||
-           filtrosAvancados.apenasComTelefone ||
-           filtrosAvancados.apenasComEndereco ||
-           filtrosAvancados.avaliacaoMaxima < 5 ||
+    return filtrosAvancados.avaliacaoMaxima < 5 ||
            filtrosAvancados.quantidadeAvaliacoesMin > 0 ||
            filtrosAvancados.quantidadeAvaliacoesMax < 1000 ||
-           filtrosAvancados.cidadesSelecionadas.length > 0 ||
-           filtrosAvancados.ordenacao !== 'recentes';
+           filtrosAvancados.cidadesSelecionadas.length > 0;
   };
 
   const limparFiltros = () => {
-    setFiltrosAvancados({
-      apenasComWhatsApp: false,
-      apenasComSite: false,
-      apenasComTelefone: false,
-      apenasComEndereco: false,
-      avaliacaoMinima: 0,
+    setFiltrosAvancados(prev => ({
+      ...prev,
       avaliacaoMaxima: 5,
       quantidadeAvaliacoesMin: 0,
       quantidadeAvaliacoesMax: 1000,
-      cidadesSelecionadas: [],
-      categoriasSelecionadas: [],
-      ordenacao: 'recentes'
-    });
+      cidadesSelecionadas: []
+    }));
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-            className="w-16 h-16 mx-auto mb-4"
-          >
-            <MessageCircle size={64} className="text-accent" />
-          </motion.div>
-          <p className="text-muted-foreground">Carregando...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen page="disparos" />;
   }
 
   return (
-    <div className="bg-background p-4 sm:p-6">
+    <div className="bg-background p-4 sm:p-6 min-h-full">
       <div className="max-w-7xl mx-auto">
-        <PageHeader
-          title="Disparos"
-          subtitle="Configure e envie mensagens em massa para suas empresas."
-          icon={<MessageCircle size={32} className="text-primary" />}
-        />
+        {/* Header Mobile */}
+        <div className="md:hidden">
+          <div className="flex items-center gap-3 p-3 border-b border-border bg-background">
+            <MessageCircle className="text-primary" size={20} />
+            <div>
+              <h1 className="text-base font-medium text-foreground">Disparos</h1>
+              <p className="text-xs text-muted-foreground">Configure e envie mensagens</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Header Desktop */}
+        <div className="hidden md:block">
+          <PageHeader
+            title="Disparos"
+            subtitle="Configure e envie mensagens em massa para suas empresas."
+            icon={<MessageCircle size={32} className="text-primary" />}
+          />
+        </div>
 
         {/* Banner de empresa vinda do Kanban */}
         {empresaVindaDoKanban && (
@@ -533,119 +633,86 @@ const DisparosPage: React.FC = () => {
         )}
 
         <div className="space-y-4 sm:space-y-6">
-          {/* Filtros Avançados - Sempre visível quando modalidade selecionada */}
+          {/* Filtros Avançados - Simplificado para Mobile */}
           {modalidadeSelecionada && (
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               className="bg-card border border-border rounded-xl overflow-hidden"
             >
-            <button
-              onClick={() => setShowFiltrosAvancados(!showFiltrosAvancados)}
-                className="w-full flex items-center justify-between p-4 hover:bg-accent/5 transition-colors"
-            >
-                <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowFiltrosAvancados(!showFiltrosAvancados)}
+                className="w-full flex items-center justify-between p-3 sm:p-4 hover:bg-accent/5 transition-colors"
+              >
+                <div className="flex items-center gap-2 sm:gap-3">
                   <div className="p-1.5 bg-accent rounded-lg">
                     <Filter size={14} className="text-accent-foreground" />
-                      </div>
+                  </div>
                   <div className="text-left">
-                  <h3 className="text-sm font-medium text-foreground">Filtros Avançados</h3>
-                    {temFiltrosAtivos() && (
-                      <p className="text-xs text-accent font-medium">
-                        {Object.values(filtrosAvancados).filter(v => v === true || (Array.isArray(v) && v.length > 0) || (typeof v === 'number' && v !== 0 && v !== 5 && v !== 1000) || (typeof v === 'string' && v !== 'recentes')).length} filtros ativos
-                    </p>
-                        )}
-                      </div>
-                    </div>
-              <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-medium text-foreground">Filtros</h3>
+                                          {temFiltrosAtivos() && (
+                        <p className="text-xs text-accent font-medium">
+                          {[
+                            filtrosAvancados.avaliacaoMaxima < 5,
+                            filtrosAvancados.quantidadeAvaliacoesMin > 0,
+                            filtrosAvancados.quantidadeAvaliacoesMax < 1000,
+                            filtrosAvancados.cidadesSelecionadas.length > 0
+                          ].filter(Boolean).length} ativos
+                        </p>
+                      )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
                   {temFiltrosAtivos() && (
                     <div className="w-2 h-2 bg-accent rounded-full"></div>
                   )}
-                  <span className="text-xs text-accent hidden sm:block">
-                  {showFiltrosAvancados ? 'Ocultar' : 'Mostrar'}
-                </span>
-                <ChevronDown 
+                  <ChevronDown 
                     size={16} 
-                  className={`text-accent transition-transform duration-200 ${
-                    showFiltrosAvancados ? 'rotate-180' : ''
-                  }`}
-                />
-                  </div>
-            </button>
+                    className={`text-accent transition-transform duration-200 ${
+                      showFiltrosAvancados ? 'rotate-180' : ''
+                    }`}
+                  />
+                </div>
+              </button>
                   
               <AnimatePresence>
-                    {showFiltrosAvancados && (
+                {showFiltrosAvancados && (
                   <motion.div
                     initial={{ height: 0 }}
                     animate={{ height: 'auto' }}
                     exit={{ height: 0 }}
                     className="overflow-hidden"
                   >
-                    <div className="border-t border-border p-4 space-y-6 bg-muted/20">
-                      {/* Filtros de Contato - Mais Compacto */}
-                <div>
-                        <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-                          Tipo de Contato
-                        </h4>
-                        <div className="grid grid-cols-2 gap-2">
-                          {[
-                            { key: 'apenasComWhatsApp', label: 'WhatsApp', icon: MessageCircle, color: 'text-green-600' },
-                            { key: 'apenasComSite', label: 'Website', icon: Globe, color: 'text-blue-600' },
-                            { key: 'apenasComTelefone', label: 'Telefone', icon: Phone, color: 'text-purple-600' },
-                            { key: 'apenasComEndereco', label: 'Endereço', icon: MapPin, color: 'text-orange-600' }
-                          ].map(({ key, label, icon: Icon, color }) => (
-                    <button
-                              key={key}
-                              onClick={() => setFiltrosAvancados(prev => ({
-                                ...prev,
-                                [key]: !prev[key as keyof FiltrosAvancados]
-                              }))}
-                              className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all font-medium text-xs ${
-                                filtrosAvancados[key as keyof FiltrosAvancados]
-                                  ? 'bg-accent text-accent-foreground border-accent shadow-sm'
-                                  : 'bg-background border-border text-muted-foreground hover:border-accent/50 hover:text-foreground'
-                      }`}
-                    >
-                              <Icon 
-                                size={14} 
-                                className={filtrosAvancados[key as keyof FiltrosAvancados] ? 'text-accent-foreground' : color}
-                              />
-                              <span className="truncate">{label}</span>
-                              {filtrosAvancados[key as keyof FiltrosAvancados] && <Check size={12} className="ml-auto" />}
-                    </button>
-                          ))}
-                        </div>
-                      </div>
-
+                    <div className="border-t border-border p-3 sm:p-4 space-y-4 bg-muted/20">
                       {/* Filtros de Avaliação - Simplificado */}
                       <div>
-                        <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-                          Avaliações
+                        <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+                          ⭐ Avaliações
                         </h4>
-                        <div className="grid grid-cols-1 gap-3">
+                        <div className="space-y-3">
                           <div>
-                            <label className="text-xs text-muted-foreground mb-2 block">Avaliação Máxima (filtrar baixas)</label>
+                            <label className="text-xs text-muted-foreground mb-1 block">Avaliação máxima</label>
                             <select
                               value={filtrosAvancados.avaliacaoMaxima}
                               onChange={(e) => setFiltrosAvancados(prev => ({
                                 ...prev,
                                 avaliacaoMaxima: Number(e.target.value)
                               }))}
-                              className="w-full px-4 py-3 text-sm bg-background border-2 border-border focus:border-accent rounded-xl focus:outline-none transition-colors"
+                              className="w-full px-3 py-2 text-sm bg-background border-2 border-border focus:border-accent rounded-lg focus:outline-none transition-colors"
                             >
                               <option value={5}>Todas as avaliações</option>
-                              <option value={4.9}>⭐ Até 4.9 estrelas</option>
-                              <option value={4.6}>⭐ Até 4.6 estrelas</option>
-                              <option value={4.4}>⭐ Até 4.4 estrelas</option>
-                              <option value={4.1}>⭐ Até 4.1 estrelas</option>
-                              <option value={3.5}>⭐ Até 3.5 estrelas</option>
-                              <option value={3.0}>⭐ Até 3.0 estrelas</option>
+                              <option value={4.9}>Até 4.9 ⭐</option>
+                              <option value={4.6}>Até 4.6 ⭐</option>
+                              <option value={4.4}>Até 4.4 ⭐</option>
+                              <option value={4.1}>Até 4.1 ⭐</option>
+                              <option value={3.5}>Até 3.5 ⭐</option>
+                              <option value={3.0}>Até 3.0 ⭐</option>
                             </select>
-                      </div>
+                          </div>
                           
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label className="text-xs text-muted-foreground mb-2 block">Min. Reviews</label>
+                              <label className="text-xs text-muted-foreground mb-1 block">Min. reviews</label>
                               <input
                                 type="number"
                                 min="0"
@@ -655,13 +722,13 @@ const DisparosPage: React.FC = () => {
                                   ...prev,
                                   quantidadeAvaliacoesMin: Number(e.target.value)
                                 }))}
-                                className="w-full px-3 py-2.5 text-sm bg-background border-2 border-border focus:border-accent rounded-xl focus:outline-none transition-colors"
+                                className="w-full px-3 py-2 text-sm bg-background border-2 border-border focus:border-accent rounded-lg focus:outline-none transition-colors"
                                 placeholder="0"
                               />
-                      </div>
+                            </div>
                             
                             <div>
-                              <label className="text-xs text-muted-foreground mb-2 block">Max. Reviews</label>
+                              <label className="text-xs text-muted-foreground mb-1 block">Max. reviews</label>
                               <input
                                 type="number"
                                 min="0"
@@ -671,24 +738,24 @@ const DisparosPage: React.FC = () => {
                                   ...prev,
                                   quantidadeAvaliacoesMax: Number(e.target.value)
                                 }))}
-                                className="w-full px-3 py-2.5 text-sm bg-background border-2 border-border focus:border-accent rounded-xl focus:outline-none transition-colors"
+                                className="w-full px-3 py-2 text-sm bg-background border-2 border-border focus:border-accent rounded-lg focus:outline-none transition-colors"
                                 placeholder="1000"
                               />
                             </div>
                           </div>
-                  </div>
-                </div>
+                        </div>
+                      </div>
 
-                      {/* Filtros de Localização - Apenas Cidades */}
-                <div>
-                        <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-                          Localização
+                      {/* Filtros de Localização - Simplificado */}
+                      <div>
+                        <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+                          📍 Localização
                         </h4>
                         <div>
-                          <label className="text-xs text-muted-foreground mb-2 block">Cidades (máx. 8 visíveis)</label>
-                          <div className="flex flex-wrap gap-2 max-h-24 overflow-hidden">
-                            {cidadesDisponiveis.slice(0, 8).map(cidade => (
-                    <button
+                          <label className="text-xs text-muted-foreground mb-2 block">Cidades</label>
+                          <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
+                            {cidadesDisponiveis.slice(0, 6).map(cidade => (
+                              <button
                                 key={cidade}
                                 onClick={() => setFiltrosAvancados(prev => ({
                                   ...prev,
@@ -696,7 +763,7 @@ const DisparosPage: React.FC = () => {
                                     ? prev.cidadesSelecionadas.filter(c => c !== cidade)
                                     : [...prev.cidadesSelecionadas, cidade]
                                 }))}
-                                className={`px-3 py-1.5 text-xs rounded-lg border-2 transition-all font-medium ${
+                                className={`px-2 py-1 text-xs rounded-lg border transition-all font-medium ${
                                   filtrosAvancados.cidadesSelecionadas.includes(cidade)
                                     ? 'bg-accent text-accent-foreground border-accent'
                                     : 'bg-background border-border text-muted-foreground hover:border-accent/50'
@@ -706,107 +773,105 @@ const DisparosPage: React.FC = () => {
                                 {filtrosAvancados.cidadesSelecionadas.includes(cidade) && (
                                   <Check size={10} className="ml-1 inline" />
                                 )}
-                    </button>
+                              </button>
                             ))}
                           </div>
-                  </div>
                         </div>
-
-                      {/* Ordenação - Simplificada */}
-                      <div>
-                        <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-                          Ordenação
-                        </h4>
-                        <select
-                          value={filtrosAvancados.ordenacao}
-                          onChange={(e) => setFiltrosAvancados(prev => ({
-                            ...prev,
-                            ordenacao: e.target.value as 'recentes' | 'avaliacao' | 'avaliacoes_count'
-                          }))}
-                          className="w-full px-4 py-3 text-sm bg-background border-2 border-border focus:border-accent rounded-xl focus:outline-none transition-colors"
-                        >
-                          <option value="recentes">📅 Mais Recentes</option>
-                          <option value="avaliacao">⭐ Melhor Avaliação</option>
-                          <option value="avaliacoes_count">📊 Mais Avaliações</option>
-                        </select>
                       </div>
 
-                      {/* Ações - Mais Visível */}
+                      {/* Ações */}
                       {temFiltrosAtivos() && (
-                        <div className="pt-4 border-t border-border flex justify-end">
-                    <button
+                        <div className="pt-3 border-t border-border flex justify-end">
+                          <button
                             onClick={limparFiltros}
-                            className="px-4 py-2 text-xs text-accent hover:text-accent-foreground hover:bg-accent rounded-lg transition-colors flex items-center gap-2 font-medium"
-                    >
+                            className="px-3 py-1.5 text-xs text-accent hover:text-accent-foreground hover:bg-accent rounded-lg transition-colors flex items-center gap-1 font-medium"
+                          >
                             <X size={12} />
-                            Limpar todos os filtros
-                    </button>
+                            Limpar filtros
+                          </button>
                         </div>
-                    )}
-                </div>
+                      )}
+                    </div>
                   </motion.div>
-            )}
+                )}
               </AnimatePresence>
             </motion.div>
           )}
 
           {/* Seleção de Modalidade */}
           {!modalidadeSelecionada ? (
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold text-foreground">
-                Selecione a modalidade
-              </h2>
+            <div className="space-y-6 pt-8 pb-6">
+              <div className="text-center">
+                <h2 className="text-xl font-semibold text-foreground mb-2">
+                  Selecione a modalidade
+                </h2>
+              </div>
               
               {modalidades.length === 0 ? (
                 <div className="text-center py-12">
-                  <Building className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma empresa encontrada</h3>
-                  <p className="text-muted-foreground mb-6">Busque empresas para poder criar campanhas de disparo</p>
-              <button
+                  <p className="text-muted-foreground mb-6 max-w-sm mx-auto">Busque empresas para poder criar campanhas de disparo</p>
+                  <button
                     onClick={() => navigate('/admin/leads')}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-accent hover:bg-accent/90 text-accent-foreground rounded-xl font-medium transition-colors shadow-sm"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-accent hover:bg-accent/90 text-accent-foreground rounded-lg font-medium transition-colors"
                   >
-                    <Target size={20} />
-                    Buscar Empresas para Disparar
+                    <Target size={16} />
+                    Buscar Empresas
                   </button>
                 </div>
               ) : (
-                <>
+                <div className="max-w-lg mx-auto space-y-4 px-4 sm:px-0">
+                  {/* Modalidades Específicas */}
+                  {modalidades.map((modalidade, index) => (
+                    <button
+                      key={modalidade}
+                      onClick={() => setModalidadeSelecionada(modalidade)}
+                      className="w-full bg-background hover:bg-accent/5 border border-border hover:border-accent/30 rounded-xl p-4 flex items-center gap-3 transition-all duration-200 hover:scale-[1.01] group"
+                    >
+                      <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-accent/20 transition-colors">
+                        <Building size={20} className="text-accent" />
+                      </div>
+                      <div className="text-left flex-1">
+                        <h3 className="text-sm font-medium text-foreground group-hover:text-accent transition-colors">{modalidade}</h3>
+                        <p className="text-xs text-muted-foreground">Empresas desta modalidade</p>
+                      </div>
+                      <ChevronRight size={16} className="text-muted-foreground group-hover:text-accent transition-colors" />
+                    </button>
+                  ))}
+
+                  {/* Separador Visual */}
+                  {modalidades.length > 0 && (
+                    <div className="relative my-6">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-border/50"></div>
+                      </div>
+                      <div className="relative flex justify-center">
+                        <span className="bg-background px-3 text-xs text-muted-foreground">ou</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Todas as Empresas */}
                   <button
                     onClick={() => setModalidadeSelecionada('todas')}
-                    className="w-full bg-background hover:bg-accent/5 border border-border rounded-xl p-4 flex items-center gap-3 transition-colors"
-              >
-                    <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
+                    className="w-full bg-gradient-to-r from-accent/10 to-accent/5 hover:from-accent/20 hover:to-accent/10 border border-accent/20 hover:border-accent/40 rounded-xl p-4 flex items-center gap-3 transition-all duration-200 hover:scale-[1.01] group"
+                  >
+                    <div className="w-10 h-10 bg-accent/20 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-accent/30 transition-colors">
                       <Building size={20} className="text-accent" />
                     </div>
-                <div className="flex-1 text-left">
-                      <h3 className="text-sm font-medium text-foreground">Todas as Empresas</h3>
+                    <div className="text-left flex-1">
+                      <h3 className="text-sm font-medium text-foreground group-hover:text-accent transition-colors">Todas as Empresas</h3>
                       <p className="text-xs text-muted-foreground">Enviar para todas as modalidades</p>
-                  </div>
-              </button>
-
-              {modalidades.map((modalidade) => (
-                <button
-                  key={modalidade}
-                      onClick={() => setModalidadeSelecionada(modalidade)}
-                      className="w-full bg-background hover:bg-accent/5 border border-border rounded-xl p-4 flex items-center gap-3 transition-colors"
-                >
-                      <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
-                        <Building size={20} className="text-accent" />
                     </div>
-                  <div className="flex-1 text-left">
-                        <h3 className="text-sm font-medium text-foreground">{modalidade}</h3>
-                        <p className="text-xs text-muted-foreground">Empresas desta modalidade</p>
-                  </div>
-                </button>
-                ))}
-                </>
+                    <ChevronRight size={16} className="text-muted-foreground group-hover:text-accent transition-colors" />
+                  </button>
+                </div>
               )}
-              </div>
-          ) :
+            </div>
+          ) : (
             <>
-              {/* Navegação */}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              {/* Navegação Simplificada - Sem Redundância */}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                 <button
                   onClick={() => {
                     setModalidadeSelecionada(null);
@@ -815,13 +880,12 @@ const DisparosPage: React.FC = () => {
                   }}
                   className="hover:text-foreground transition-colors"
                 >
-                  Modalidades
+                  ← Voltar
                 </button>
-                <ChevronRight size={14} />
-                <span className="text-foreground">
+                <span className="text-foreground font-medium">
                   {modalidadeSelecionada === 'todas' ? 'Todas as Empresas' : modalidadeSelecionada}
-                      </span>
-                    </div>
+                </span>
+              </div>
 
               {/* Segmentos do Kanban */}
               {!selectedSegment ? (
@@ -831,28 +895,28 @@ const DisparosPage: React.FC = () => {
                   </h2>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {kanbanSegments.map((segment) => (
-                  <button
-                      key={segment.id}
+                    {kanbanSegments.map((segment) => (
+                      <button
+                        key={segment.id}
                         onClick={() => setSelectedSegment(segment)}
                         className="bg-background hover:bg-accent/5 border border-border rounded-xl p-4 text-left transition-colors"
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-accent/10 rounded-lg flex items-center justify-center">
-                        <Users size={16} className="text-accent" />
-                      </div>
+                      >
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-8 h-8 bg-accent/10 rounded-lg flex items-center justify-center">
+                            <Users size={16} className="text-accent" />
+                          </div>
                           <span className="text-2xl font-bold text-accent">{segment.count}</span>
-                              </div>
-                    <h3 className="text-sm font-medium text-foreground">{segment.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">{segment.description}</p>
-                  </button>
-                ))}
-                            </div>
+                        </div>
+                        <h3 className="text-sm font-medium text-foreground">{segment.title}</h3>
+                        <p className="text-xs text-muted-foreground mt-1">{segment.description}</p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <>
-                  {/* Navegação Detalhada */}
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {/* Navegação Detalhada Simplificada */}
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                     <button
                       onClick={() => {
                         setModalidadeSelecionada(null);
@@ -860,18 +924,10 @@ const DisparosPage: React.FC = () => {
                       }}
                       className="hover:text-foreground transition-colors"
                     >
-                      Modalidades
+                      ← Voltar
                     </button>
-                    <ChevronRight size={14} />
-                    <button
-                      onClick={() => setSelectedSegment(null)}
-                      className="hover:text-foreground transition-colors"
-                    >
-                      {modalidadeSelecionada === 'todas' ? 'Todas as Empresas' : modalidadeSelecionada}
-                    </button>
-                    <ChevronRight size={14} />
-                    <span className="text-foreground">{selectedSegment.title}</span>
-                          </div>
+                    <span className="text-foreground font-medium">{selectedSegment.title}</span>
+                  </div>
 
                   {/* Lista de Empresas com Controles */}
                   <div className="space-y-4">
@@ -882,21 +938,21 @@ const DisparosPage: React.FC = () => {
                         </h2>
                         
                         <div className="flex items-center gap-2">
-                  <button
+                          <button
                             onClick={() => setSelecionadas(empresasSegmento.map(e => e.id))}
                             disabled={selecionadas.length === empresasSegmento.length}
                             className="px-3 py-1.5 text-xs bg-accent/10 text-accent hover:bg-accent/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                          Selecionar todas
-                  </button>
-                  <button
+                          >
+                            Selecionar todas
+                          </button>
+                          <button
                             onClick={() => setSelecionadas([])}
                             disabled={selecionadas.length === 0}
                             className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                          Limpar seleção
-                  </button>
-                      </div>
+                          >
+                            Limpar seleção
+                          </button>
+                        </div>
                       </div>
                       
                       {/* Status da Seleção e Botão de Disparo */}
@@ -911,19 +967,22 @@ const DisparosPage: React.FC = () => {
                               : `${selecionadas.length} de ${empresasSegmento.length} empresas selecionadas`
                             }
                           </span>
-                      </div>
+                        </div>
 
-                      {selecionadas.length > 0 && (
+                        {selecionadas.length > 0 && (
                           <button
-                            onClick={() => setShowDisparoConfig(true)}
+                            onClick={() => {
+                  resetWizard();
+                  setShowDisparoConfig(true);
+                }}
                             className="px-6 py-2.5 bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl transition-colors flex items-center gap-2 text-sm font-medium shadow-sm"
                           >
                             <Play size={16} />
                             Iniciar Disparo ({selecionadas.length})
                           </button>
-                                )}
-                              </div>
-                        </div>
+                        )}
+                      </div>
+                    </div>
 
                     {empresasSegmento.length === 0 ? (
                       <div className="text-center py-12">
@@ -938,21 +997,21 @@ const DisparosPage: React.FC = () => {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {empresasSegmento.map((empresa) => (
-                            <button 
-                        key={empresa.id}
-                        onClick={() => toggleSelecionada(empresa.id)}
+                        {empresasSegmento.map((empresa) => (
+                          <button 
+                            key={empresa.id}
+                            onClick={() => toggleSelecionada(empresa.id)}
                             className={`bg-background border-2 rounded-xl p-4 text-left transition-all ${
                               selecionadas.includes(empresa.id)
                                 ? 'border-accent bg-accent/5'
                                 : 'border-border hover:border-accent/40'
                             }`}
-                      >
+                          >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-medium text-foreground truncate">
-                              {empresa.titulo}
-                            </h3>
+                                <h3 className="text-sm font-medium text-foreground truncate">
+                                  {empresa.titulo}
+                                </h3>
                                 {empresa.categoria && (
                                   <p className="text-xs text-muted-foreground">{empresa.categoria}</p>
                                 )}
@@ -980,10 +1039,10 @@ const DisparosPage: React.FC = () => {
                                     <MessageCircle size={12} />
                                     <span>WhatsApp</span>
                                   </div>
-                            )}
-                            {empresa.website && (
+                                )}
+                                {empresa.website && (
                                   <div className="flex items-center gap-1 text-blue-600">
-                                <Globe size={12} />
+                                    <Globe size={12} />
                                     <span>Site</span>
                                   </div>
                                 )}
@@ -992,24 +1051,24 @@ const DisparosPage: React.FC = () => {
                               {empresa.endereco && (
                                 <p className="text-xs text-muted-foreground truncate">
                                   {empresa.endereco.split(',').slice(-2).join(',')}
-                              </p>
-                          )}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                  </button>
-                    ))}
-                </div>
                     )}
                   </div>
                 </>
               )}
             </>
-          }
+          )}
         </div>
 
-        {/* Modal de Configuração */}
+        {/* Modal de Configuração - Wizard por Etapas */}
         {showDisparoConfig && (
           <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4"
             onClick={() => setShowDisparoConfig(false)}
           >
             <motion.div
@@ -1017,177 +1076,328 @@ const DisparosPage: React.FC = () => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.2 }}
-              className="bg-background border border-border rounded-xl max-w-2xl w-full max-h-[90vh] flex flex-col"
+              className="bg-background border border-border rounded-xl w-full max-w-lg max-h-[90vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-border">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-foreground">
-                    Configurar Disparo ({selecionadas.length} empresas)
-                  </h2>
+              {/* Header com Progress - Compacto Mobile */}
+              <div className="p-3 sm:p-6 border-b border-border">
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-6 h-6 sm:w-10 sm:h-10 bg-accent/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+                      <Play size={12} className="sm:w-5 sm:h-5 text-accent" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm sm:text-lg font-semibold text-foreground">
+                        Configurar Disparo
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        {selecionadas.length} empresas
+                      </p>
+                    </div>
+                  </div>
                   <button
                     onClick={() => setShowDisparoConfig(false)}
-                    className="p-2 -mr-2 text-muted-foreground hover:bg-accent/10 rounded-lg transition-colors"
+                    className="p-1.5 sm:p-2 text-muted-foreground hover:bg-accent/10 rounded-lg transition-colors"
                   >
-                    <X size={20} />
+                    <X size={14} className="sm:w-4 sm:h-4" />
                   </button>
                 </div>
+
+                {/* Progress Bar - Compacto */}
+                <div className="flex items-center gap-1.5 sm:gap-2 mb-2">
+                  {[1, 2].map((step) => (
+                    <div key={step} className="flex items-center flex-1">
+                      <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
+                        step <= currentStep 
+                          ? 'bg-accent text-accent-foreground' 
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {step}
+                      </div>
+                      {step < 2 && (
+                        <div className={`flex-1 h-0.5 sm:h-1 mx-1 sm:mx-2 rounded-full transition-all ${
+                          step < currentStep ? 'bg-accent' : 'bg-muted'
+                        }`} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Step Labels - Compacto */}
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span className={currentStep >= 1 ? 'text-accent font-medium' : ''}>Conexão</span>
+                  <span className={currentStep >= 2 ? 'text-accent font-medium' : ''}>Mensagem</span>
+                </div>
               </div>
 
-              <div className="p-6 space-y-6 overflow-y-auto flex-1">
-                {/* Seleção de WhatsApp */}
-                <div className="">
-                  <label className="block text-sm font-medium text-foreground mb-3">
-                    Conexão WhatsApp
-                  </label>
-                  {connections.length === 0 ? (
-                    <div className="text-center py-8 border-2 border-dashed border-border rounded-xl">
-                      <Phone className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                      <h3 className="text-sm font-medium text-foreground mb-2">Nenhuma conexão WhatsApp</h3>
-                      <p className="text-xs text-muted-foreground mb-4">Configure uma conexão para enviar mensagens</p>
-                      <button
-                        onClick={() => {
-                          setShowDisparoConfig(false);
-                          navigate('/admin/conexoes');
-                        }}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/90 text-accent-foreground rounded-lg font-medium transition-colors text-sm"
-                      >
-                        <Phone size={16} />
-                        Configurar Conexões
-                      </button>
+              {/* Conteúdo por Etapas */}
+              <div className="p-3 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto flex-1">
+                {/* Etapa 1: Seleção de Conexão */}
+                {currentStep === 1 && (
+                  <div className="space-y-3">
+                    <div className="text-center mb-4">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <Phone size={20} className="sm:w-6 sm:h-6 text-green-500" />
+                      </div>
+                      <h3 className="text-base sm:text-lg font-semibold text-foreground mb-1">
+                        Selecione a Conexão WhatsApp
+                      </h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground">
+                        Escolha o dispositivo para envio
+                      </p>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {connections.map((connection) => (
+
+                    {connections.length === 0 ? (
+                      <div className="text-center py-8 border-2 border-dashed border-border rounded-xl">
+                        <Phone className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                        <h3 className="text-sm font-medium text-foreground mb-2">Nenhuma conexão encontrada</h3>
+                        <p className="text-xs text-muted-foreground mb-4">Configure uma conexão WhatsApp primeiro</p>
                         <button
-                          key={connection.id}
-                          onClick={() => setSelectedConnection(connection.instance_name)}
-                          className={`p-3 border rounded-lg text-left transition-colors ${
-                            selectedConnection === connection.instance_name
-                              ? 'border-accent bg-accent/5'
-                              : 'border-border hover:border-accent/40'
-                          }`}
+                          onClick={() => {
+                            setShowDisparoConfig(false);
+                            navigate('/admin/conexoes');
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/90 text-accent-foreground rounded-lg font-medium transition-colors text-sm"
                         >
-                          <div className="font-medium text-sm text-foreground">
-                            {connection.instance_name}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {connection.status}
-                          </div>
+                          <Phone size={16} />
+                          Configurar Conexão
                         </button>
-                      ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {connections.map((connection) => (
+                          <button
+                            key={connection.id}
+                            onClick={() => setSelectedConnection(connection.instance_name)}
+                            className={`w-full p-4 border-2 rounded-xl text-left transition-all duration-200 ${
+                              selectedConnection === connection.instance_name
+                                ? 'border-accent bg-accent/10 shadow-md'
+                                : 'border-border hover:border-accent/40 hover:bg-accent/5 shadow-sm hover:shadow-md'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                                selectedConnection === connection.instance_name 
+                                  ? 'bg-accent shadow-sm' 
+                                  : 'bg-muted'
+                              }`}></div>
+                              <div className="flex-1">
+                                <div className="font-medium text-sm text-foreground">
+                                  {connection.instance_name}
+                                </div>
+                                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                  <div className={`w-2 h-2 rounded-full ${
+                                    connection.status === 'connected' ? 'bg-green-500' : 'bg-yellow-500'
+                                  }`}></div>
+                                  {connection.status === 'connected' ? 'Conectado' : 'Desconectado'}
+                                </div>
+                              </div>
+                              {selectedConnection === connection.instance_name && (
+                                <CheckCircle size={20} className="text-accent" />
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Etapa 2: Mensagem */}
+                {currentStep === 2 && (
+                  <div className="space-y-3">
+                    <div className="text-center mb-4">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <MessageCircle size={20} className="sm:w-6 sm:h-6 text-blue-500" />
+                      </div>
+                      <h3 className="text-base sm:text-lg font-semibold text-foreground mb-1">
+                        Configure sua Mensagem
+                      </h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground">
+                        Escreva a mensagem para as empresas
+                      </p>
                     </div>
-          )}
-        </div>
 
-                {/* Seleção de Template */}
-                <div className="">
-                  <label className="block text-sm font-medium text-foreground mb-3">
-                    Template de Mensagem
-                  </label>
-                  <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {templates.map((template) => (
-                      <button
-                        key={template.id}
-                        onClick={() => {
-                          setSelectedTemplate(template.id);
-                          setCustomMessage(template.content);
-                        }}
-                        className={`w-full p-3 border rounded-lg text-left transition-colors ${
-                          selectedTemplate === template.id
-                            ? 'border-accent bg-accent/5'
-                            : 'border-border hover:border-accent/40'
-                        }`}
-                      >
-                        <div className="font-medium text-sm text-foreground">
-                          {template.name}
+                    {/* Template Selector - Compacto */}
+                    <div>
+                      <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
+                        Template (opcional)
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={selectedTemplate || ''}
+                          onChange={(e) => {
+                            const templateId = e.target.value;
+                            if (templateId === 'blank') {
+                              setSelectedTemplate(null);
+                              setCustomMessage('');
+                            } else if (templateId) {
+                              const template = templates.find(t => t.id === Number(templateId));
+                              if (template) {
+                                setSelectedTemplate(template.id);
+                                setCustomMessage(template.content);
+                              }
+                            } else {
+                              setSelectedTemplate(null);
+                            }
+                          }}
+                          className="w-full appearance-none bg-background border border-border rounded-lg px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-foreground hover:border-accent/60 focus:border-accent focus:outline-none transition-all duration-200 pr-8 sm:pr-10 cursor-pointer"
+                        >
+                          <option value="">Selecionar template...</option>
+                          <option value="blank">Mensagem em branco</option>
+                          {templates.map((template) => (
+                            <option key={template.id} value={template.id}>
+                              {template.name}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} className="sm:w-4 sm:h-4 absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                      </div>
+                    </div>
+
+                    {/* Message Input - Compacto */}
+                    <div>
+                      <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
+                        Mensagem <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <textarea
+                          value={customMessage}
+                          onChange={(e) => setCustomMessage(e.target.value)}
+                          placeholder="Digite sua mensagem..."
+                          className="w-full px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 resize-none transition-all duration-200"
+                          rows={3}
+                          style={{ minHeight: '80px' }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center mt-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {customMessage.length} chars
+                          </span>
+                          {!customMessage.trim() && (
+                            <span className="text-xs text-red-500 font-medium">Obrigatório</span>
+                          )}
                         </div>
-                        <div className="text-xs text-muted-foreground truncate">
-                          {template.content}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                        
+                        {/* Botão Salvar Template - Intuitivo */}
+                        {customMessage.trim() && (
+                          <button
+                            onClick={async () => {
+                              const templateName = prompt('Nome do template:');
+                              if (templateName && templateName.trim()) {
+                                try {
+                                  const result = await templateService.createTemplate({
+                                    name: templateName.trim(),
+                                    content: customMessage.trim(),
+                                    preview: customMessage.trim().substring(0, 100) + (customMessage.trim().length > 100 ? '...' : '')
+                                  });
+                                  if (result.success) {
+                                    const templatesResult = await templateService.listTemplates();
+                                    if (templatesResult.success && templatesResult.data) {
+                                      setTemplates(templatesResult.data);
+                                    }
+                                    alert('Template salvo!');
+                                  } else {
+                                    alert('Erro: ' + result.error);
+                                  }
+                                } catch (error) {
+                                  alert('Erro ao salvar');
+                                }
+                              }
+                            }}
+                            className="px-2.5 py-1.5 text-xs bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 rounded-lg transition-colors font-medium flex items-center gap-1.5 border border-blue-500/20"
+                          >
+                            <span className="text-sm">📝</span>
+                            <span>Salvar Template</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
 
-                {/* Mensagem Personalizada */}
-                <div className="">
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Mensagem
-                  </label>
-                  <textarea
-                    value={customMessage}
-                    onChange={(e) => setCustomMessage(e.target.value)}
-                    placeholder="Digite sua mensagem..."
-                    className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/40 resize-none"
-                    rows={4}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-2">
-                      Nome da Campanha
-                    </label>
-                    <input
-                      type="text"
-                      value={nomeCampanha}
-                      onChange={(e) => setNomeCampanha(e.target.value)}
-                      placeholder="Ex: Prospecção Janeiro"
-                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/40"
-                    />
+                    {/* Delay entre Mensagens */}
+                    <div>
+                      <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
+                        Delay entre mensagens (segundos) <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={delay}
+                          onChange={(e) => setDelay(Math.max(1, parseInt(e.target.value) || 30))}
+                          min="1"
+                          max="300"
+                          className="w-full px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200"
+                          placeholder="30"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Tempo de espera entre cada mensagem (recomendado: 30-60s)
+                      </p>
+                    </div>
                   </div>
-                  
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-2">
-                      Delay (segundos)
-                    </label>
-                    <input
-                      type="number"
-                      value={delay}
-                      onChange={(e) => setDelay(Number(e.target.value))}
-                      min="1"
-                      max="300"
-                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/40"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
 
-              {/* Botões */}
-              <div className="flex justify-end gap-3 p-6 border-t border-border">
+              {/* Botões de Navegação */}
+              <div className="flex gap-2 sm:gap-3 p-3 sm:p-6 border-t border-border bg-muted/5">
                 <button
                   onClick={() => setShowDisparoConfig(false)}
-                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  className="px-3 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-lg transition-all duration-200 font-medium border border-border hover:border-border/60"
                 >
                   Cancelar
                 </button>
-                <button
-                  onClick={handleLaunch}
-                  disabled={!selectedConnection || !customMessage.trim() || isLaunching}
-                  className="px-6 py-2 bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                >
-                  {isLaunching ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-accent-foreground/20 border-t-accent-foreground rounded-full animate-spin" />
-                      Agendando...
-                    </>
-                  ) : (
-                    <>
-                      <Play size={16} />
-                      Confirmar Disparo
-                    </>
-                  )}
-                </button>
+                
+                <div className="flex-1" />
+                
+                {currentStep > 1 && (
+                  <button
+                    onClick={prevStep}
+                    className="px-3 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-all duration-200 font-medium"
+                  >
+                    Voltar
+                  </button>
+                )}
+                
+                {currentStep < 2 ? (
+                  <button
+                    onClick={nextStep}
+                    disabled={currentStep === 1 && !canProceedToStep2()}
+                    className="px-4 py-2 sm:px-6 sm:py-2.5 bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg transition-all duration-200 flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Próximo
+                    <ChevronRight size={14} className="sm:w-4 sm:h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleLaunch}
+                    disabled={!canFinishWizard() || isLaunching}
+                    className="px-4 py-2 sm:px-6 sm:py-2.5 bg-gradient-to-r from-accent to-accent/90 text-accent-foreground hover:from-accent/90 hover:to-accent/80 rounded-lg transition-all duration-200 flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLaunching ? (
+                      <>
+                        <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-accent-foreground/20 border-t-accent-foreground rounded-full animate-spin" />
+                        <span className="hidden sm:inline">Aguarde...</span>
+                        <span className="sm:hidden">...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play size={14} className="sm:w-4 sm:h-4" />
+                        <span className="hidden sm:inline">Iniciar Disparo</span>
+                        <span className="sm:hidden">Iniciar</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>
         )}
 
-        {/* Animação de Disparo */}
+        {/* Animação de Disparo - Compacta para Mobile */}
         {showDispatchAnimation && (
-          <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="text-center space-y-8">
+          <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center p-2">
+            <div className="text-center space-y-4 sm:space-y-6 max-w-sm w-full">
               {/* Ícone Principal Animado */}
               <motion.div
                 initial={{ scale: 0 }}
@@ -1195,12 +1405,12 @@ const DisparosPage: React.FC = () => {
                 transition={{ duration: 0.5 }}
                 className="relative"
               >
-                <div className="w-32 h-32 bg-accent/20 rounded-full flex items-center justify-center mx-auto">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 bg-accent/20 rounded-full flex items-center justify-center mx-auto">
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                   >
-                    <MessageCircle size={64} className="text-accent" />
+                    <MessageCircle size={32} className="sm:w-12 sm:h-12 md:w-16 md:h-16 text-accent" />
                   </motion.div>
                 </div>
                 
@@ -1209,13 +1419,13 @@ const DisparosPage: React.FC = () => {
                   initial={{ scale: 0, opacity: 1 }}
                   animate={{ scale: 2, opacity: 0 }}
                   transition={{ duration: 2, repeat: Infinity }}
-                  className="absolute inset-0 border-4 border-accent/30 rounded-full"
+                  className="absolute inset-0 border-2 sm:border-4 border-accent/30 rounded-full"
                 />
                 <motion.div
                   initial={{ scale: 0, opacity: 1 }}
                   animate={{ scale: 2, opacity: 0 }}
                   transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
-                  className="absolute inset-0 border-4 border-accent/20 rounded-full"
+                  className="absolute inset-0 border-2 sm:border-4 border-accent/20 rounded-full"
                 />
               </motion.div>
 
@@ -1224,14 +1434,13 @@ const DisparosPage: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
-                className="space-y-4"
+                className="space-y-2 sm:space-y-3"
               >
-                <h2 className="text-2xl font-bold text-foreground">
-                  Realizando Disparos
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">
+                  🎉 Disparos Iniciados!
                 </h2>
-                <p className="text-muted-foreground max-w-md mx-auto">
-                  Seus disparos estão sendo agendados e processados. 
-                  As mensagens serão enviadas com o delay configurado.
+                <p className="text-xs sm:text-sm text-muted-foreground px-2">
+                  Sua campanha foi criada e os disparos estão sendo processados
                 </p>
               </motion.div>
 
@@ -1240,14 +1449,14 @@ const DisparosPage: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1 }}
-                className="grid grid-cols-3 gap-6 max-w-lg mx-auto"
+                className="grid grid-cols-3 gap-3 sm:gap-4 md:gap-6 max-w-xs sm:max-w-md mx-auto"
               >
                 <div className="text-center">
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ delay: 1.2, type: "spring" }}
-                    className="text-2xl font-bold text-accent"
+                    className="text-lg sm:text-xl md:text-2xl font-bold text-accent"
                   >
                     {selecionadas.length}
                   </motion.div>
@@ -1258,65 +1467,59 @@ const DisparosPage: React.FC = () => {
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ delay: 1.4, type: "spring" }}
-                    className="text-2xl font-bold text-accent"
+                    className="text-lg sm:text-xl md:text-2xl font-bold text-accent"
                   >
                     {delay}s
                   </motion.div>
                   <div className="text-xs text-muted-foreground">Delay</div>
+                  {/* Pontos de Loading no meio */}
+                  <div className="flex justify-center space-x-1 mt-1">
+                    {[0, 1, 2].map((i) => (
+                      <motion.div
+                        key={i}
+                        animate={{ y: [-3, 3, -3] }}
+                        transition={{
+                          duration: 1.5,
+                          repeat: Infinity,
+                          delay: i * 0.2
+                        }}
+                        className="w-1 h-1 bg-accent rounded-full"
+                      />
+                    ))}
+                  </div>
                 </div>
                 <div className="text-center">
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ delay: 1.6, type: "spring" }}
-                    className="text-2xl font-bold text-accent"
+                    className="text-lg sm:text-xl md:text-2xl font-bold text-accent flex items-center justify-center"
                   >
-                    <MessageCircle size={24} className="mx-auto" />
+                    <Phone size={16} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
                   </motion.div>
                   <div className="text-xs text-muted-foreground">WhatsApp</div>
                 </div>
-              </motion.div>
-
-              {/* Pontos de Loading */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 2 }}
-                className="flex justify-center space-x-2"
-              >
-                {[0, 1, 2].map((i) => (
-                  <motion.div
-                    key={i}
-                    animate={{ y: [-10, 10, -10] }}
-                    transition={{
-                      duration: 1.5,
-                      repeat: Infinity,
-                      delay: i * 0.2
-                    }}
-                    className="w-2 h-2 bg-accent rounded-full"
-                  />
-                ))}
               </motion.div>
             </div>
           </div>
         )}
 
-        {/* Tela de Sucesso */}
+        {/* Tela de Sucesso - Compacta para Mobile */}
         {showSuccessScreen && dispatchStats && (
-          <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-card border border-border rounded-2xl p-8 max-w-lg w-full text-center space-y-6"
+              className="bg-card border border-border rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 max-w-sm sm:max-w-md md:max-w-lg w-full text-center space-y-3 sm:space-y-4 md:space-y-6"
             >
               {/* Ícone de Sucesso */}
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-                className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto"
+                className="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto"
               >
-                <CheckCircle size={40} className="text-emerald-500" />
+                <CheckCircle size={24} className="sm:w-10 sm:h-10 text-emerald-500" />
               </motion.div>
 
               {/* Título */}
@@ -1325,10 +1528,10 @@ const DisparosPage: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
               >
-                <h2 className="text-2xl font-bold text-foreground mb-2">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground mb-1 sm:mb-2">
                   🎉 Disparos Iniciados!
                 </h2>
-                <p className="text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground px-2">
                   Sua campanha foi criada e os disparos estão sendo processados
                 </p>
               </motion.div>
@@ -1338,14 +1541,14 @@ const DisparosPage: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.6 }}
-                className="grid grid-cols-2 gap-4 p-4 bg-muted/20 rounded-xl"
+                className="grid grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 bg-muted/20 rounded-lg sm:rounded-xl"
               >
                 <div className="text-center">
-                  <div className="text-xl font-bold text-accent">{dispatchStats.tasksAgendadas}</div>
+                  <div className="text-lg sm:text-xl font-bold text-accent">{dispatchStats.tasksAgendadas}</div>
                   <div className="text-xs text-muted-foreground">Mensagens Agendadas</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xl font-bold text-accent">{dispatchStats.tempoEstimado}</div>
+                  <div className="text-lg sm:text-xl font-bold text-accent">{dispatchStats.tempoEstimado}</div>
                   <div className="text-xs text-muted-foreground">Tempo Estimado</div>
                 </div>
               </motion.div>
@@ -1355,15 +1558,15 @@ const DisparosPage: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.8 }}
-                className="space-y-3 text-sm text-muted-foreground"
+                className="space-y-2 sm:space-y-3 text-xs sm:text-sm text-muted-foreground"
               >
-                <div className="flex items-center gap-2 justify-center">
-                  <Clock size={16} />
-                  <span>Delay de {dispatchStats.delaySegundos} segundos entre mensagens</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 justify-center">
+                  <Clock size={12} className="sm:w-4 sm:h-4" />
+                  <span className="leading-tight">Delay de {delay}s entre mensagens</span>
                 </div>
-                <div className="flex items-center gap-2 justify-center">
-                  <MessageCircle size={16} />
-                  <span>Mensagens aparecerão na aba "Conversas"</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 justify-center">
+                  <MessageCircle size={12} className="sm:w-4 sm:h-4" />
+                  <span className="leading-tight">Mensagens aparecerão na aba "Conversas"</span>
                 </div>
               </motion.div>
 
@@ -1372,14 +1575,14 @@ const DisparosPage: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1 }}
-                className="flex gap-3"
+                className="flex gap-2 sm:gap-3"
               >
                 <button
                   onClick={() => {
                     setShowSuccessScreen(false);
                     setDispatchStats(null);
                   }}
-                  className="flex-1 px-4 py-2 bg-muted text-muted-foreground hover:bg-muted/80 rounded-lg transition-colors text-sm font-medium"
+                  className="flex-1 px-3 py-2 sm:px-4 sm:py-2.5 bg-muted text-muted-foreground hover:bg-muted/80 rounded-lg transition-colors text-xs sm:text-sm font-medium"
                 >
                   Continuar
                 </button>
@@ -1389,10 +1592,11 @@ const DisparosPage: React.FC = () => {
                     setDispatchStats(null);
                     navigate('/admin/campanhas');
                   }}
-                  className="flex-1 px-4 py-2 bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg transition-colors text-sm font-medium flex items-center gap-2 justify-center"
+                  className="flex-1 px-3 py-2 sm:px-4 sm:py-2.5 bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center gap-1.5 sm:gap-2 justify-center"
                 >
-                  <Clock size={16} />
-                  Ver Histórico
+                  <BarChart3 size={12} className="sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Ver Histórico</span>
+                  <span className="sm:hidden">Histórico</span>
                 </button>
               </motion.div>
             </motion.div>

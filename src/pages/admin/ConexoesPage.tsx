@@ -16,9 +16,10 @@ import {
   Settings
 } from '../../utils/icons';
 import { whatsappService, WhatsAppInstance } from '../../services/whatsappService';
-import { TemplateManager } from '../../components/admin/TemplateManager';
+
 import PageHeader from '../../components/ui/PageHeader';
 import { supabase } from '../../lib/supabase';
+import LoadingScreen from '../../components/ui/LoadingScreen';
 
 const ConexoesPage: React.FC = () => {
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
@@ -29,7 +30,7 @@ const ConexoesPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingInstances, setIsLoadingInstances] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'connections' | 'templates'>('connections');
+
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
 
@@ -49,6 +50,16 @@ const ConexoesPage: React.FC = () => {
       return () => document.removeEventListener('click', handleClickOutside);
     }
   }, [openMenuId]);
+
+  // Limpar estilo do menu mobile quando modal fechar
+  useEffect(() => {
+    if (!showQrModal) {
+      const styleElement = document.querySelector('style');
+      if (styleElement && styleElement.textContent?.includes('nav.md\\:hidden')) {
+        styleElement.remove();
+      }
+    }
+  }, [showQrModal]);
 
   const loadInstances = async () => {
     setIsLoadingInstances(true);
@@ -293,7 +304,8 @@ const ConexoesPage: React.FC = () => {
     
     return (
       <div className="relative">
-        <div className={`relative border rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.02] ${
+        {/* Desktop Card */}
+        <div className={`hidden md:block relative border rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.02] ${
           isConnected 
             ? 'bg-emerald-500/10 border-emerald-500/30' 
             : 'bg-card border-border hover:border-accent/30'
@@ -385,6 +397,87 @@ const ConexoesPage: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Mobile Compact Card */}
+        <div className={`md:hidden bg-card border border-border rounded-lg p-3 transition-all duration-200 ${
+          isConnected 
+            ? 'border-emerald-500/30 bg-emerald-500/5' 
+            : 'border-border'
+        }`}>
+          
+          <div className="flex items-center gap-2">
+            {/* Avatar */}
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 ${
+              isConnected ? 'bg-emerald-500' : 'bg-muted'
+            }`}>
+              {instance.profilePicUrl ? (
+                <img 
+                  src={instance.profilePicUrl} 
+                  alt={`Foto de ${instance.name}`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <span className={`text-white font-semibold text-xs ${instance.profilePicUrl ? 'hidden' : ''}`}>
+                {initials}
+              </span>
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <h3 className="text-sm font-medium text-foreground truncate">
+                  {instance.name}
+                </h3>
+                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                  isConnected ? 'bg-emerald-500' : 'bg-red-500'
+                }`} />
+              </div>
+              <div className={`text-xs flex items-center gap-1 ${
+                isConnected ? 'text-emerald-600 font-medium' : 'text-muted-foreground'
+              }`}>
+                {isConnected ? '✓ Conectado' : '● Desconectado'}
+              </div>
+            </div>
+
+            {/* Mobile Actions */}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {!isConnected && (
+                <button
+                  onClick={(e) => handleMenuAction('qrcode', e)}
+                  className="p-1.5 bg-accent/10 hover:bg-accent/20 rounded-lg transition-colors text-accent"
+                  title="Conectar"
+                >
+                  <QrCode size={14} />
+                </button>
+              )}
+              <div className="relative">
+                <button
+                  onClick={handleMenuToggle}
+                  className="p-1.5 hover:bg-muted/50 rounded-lg transition-colors text-muted-foreground"
+                >
+                  <MoreVertical size={16} />
+                </button>
+
+                {/* Mobile Dropdown Menu */}
+                {isMenuOpen && (
+                  <div className="absolute right-0 top-10 bg-card border border-border rounded-lg shadow-lg z-10 py-1 min-w-[120px]">
+                    <button
+                      onClick={(e) => handleMenuAction('delete', e)}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-red-500/10 transition-colors flex items-center gap-2 text-red-500"
+                    >
+                      <Trash2 size={14} />
+                      Excluir
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -392,36 +485,54 @@ const ConexoesPage: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen bg-background p-2 md:p-6">
+    <div className="min-h-full bg-background p-2 md:p-6">
       <div className="page-content-wrapper">
-        <PageHeader
-          title="Conexões"
-          subtitle="Gerencie suas contas do WhatsApp para envio de mensagens."
-          icon={<Phone size={32} className="text-primary" />}
-          actions={
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="bg-muted text-muted-foreground hover:bg-muted/80 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-                title="Atualizar status das conexões"
-              >
-                <RefreshCw size={16} className={`${isRefreshing ? 'animate-spin' : ''}`} />
-                {isRefreshing ? 'Atualizando...' : 'Atualizar'}
-              </button>
-              <button 
-                onClick={() => setShowCreateModal(true)}
-                className="bg-accent text-accent-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors flex items-center gap-2"
-              >
-                <Plus size={16} />
-                Nova Conexão
-              </button>
+        {/* Header Mobile */}
+        <div className="md:hidden mb-4">
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-accent/20 to-primary/20 rounded-xl mb-3">
+              <Phone size={20} className="text-accent" />
             </div>
-          }
-        />
+            <h1 className="text-lg font-semibold text-foreground mb-1">
+              Dispositivos Conectados
+            </h1>
+            <p className="text-muted-foreground text-xs max-w-md mx-auto">
+              Gerencie suas contas WhatsApp para envio de mensagens
+            </p>
+          </div>
+        </div>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        {/* Header Desktop */}
+        <div className="hidden md:block">
+          <PageHeader
+            title="Conexões"
+            subtitle="Gerencie suas contas do WhatsApp para envio de mensagens."
+            icon={<Phone size={32} className="text-primary" />}
+            actions={
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="bg-muted text-muted-foreground hover:bg-muted/80 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                  title="Atualizar status das conexões"
+                >
+                  <RefreshCw size={16} className={`${isRefreshing ? 'animate-spin' : ''}`} />
+                  {isRefreshing ? 'Atualizando...' : 'Atualizar'}
+                </button>
+                <button 
+                  onClick={() => setShowCreateModal(true)}
+                  className="bg-accent text-accent-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  Nova Conexão
+                </button>
+              </div>
+            }
+          />
+        </div>
+
+        {/* KPIs Desktop */}
+        <div className="hidden md:grid grid-cols-3 gap-3 mb-6">
           {/* Total de Conexões */}
           <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
             <div className="flex items-center gap-3 mb-2">
@@ -468,33 +579,7 @@ const ConexoesPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="bg-card border border-border rounded-xl p-4 mb-6">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button
-              onClick={() => setActiveTab('connections')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'connections'
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/5'
-              }`}
-            >
-              <Phone size={16} />
-              WhatsApp ({instances.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('templates')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'templates'
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/5'
-              }`}
-            >
-              <MessageCircle size={16} />
-              Templates
-            </button>
-          </div>
-        </div>
+
 
         {/* Mensagem de Atualização */}
         {updateMessage && (
@@ -519,39 +604,92 @@ const ConexoesPage: React.FC = () => {
         <div className="space-y-6">
           {isLoadingInstances ? (
             <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-accent mx-auto mb-3"></div>
-                <p className="text-sm text-muted-foreground">Carregando conexões...</p>
-              </div>
+              <LoadingScreen page="conexoes" />
             </div>
           ) : (
             <>
-              {/* Todas as Conexões */}
+              {/* Desktop: Todas as Conexões */}
               {instances.length > 0 && (
-                <div className="bg-card border border-border rounded-xl p-4">
-                  <h2 className="text-sm font-medium text-foreground mb-4 flex items-center gap-2">
-                    <Phone size={16} className="text-accent" />
-                    Conexões WhatsApp ({instances.length})
-                  </h2>
+                <div className="hidden md:block bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="p-4 border-b border-border">
+                    <h2 className="text-sm font-medium text-foreground flex items-center gap-2">
+                      <Phone size={16} className="text-accent" />
+                      Conexões WhatsApp ({instances.length})
+                    </h2>
+                  </div>
+                  
                   <div 
-                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                    className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
                     onClick={(e) => {
-                      // Fechar menu se clicar fora
                       if (e.target === e.currentTarget) {
                         setOpenMenuId(null);
                       }
                     }}
                   >
-                    {instances.map((instance) => (
-                      <ConnectionCard key={instance.id} instance={instance} />
-                    ))}
+                    {instances
+                      .sort((a, b) => {
+                        if (a.status === 'connected' && b.status !== 'connected') return -1;
+                        if (a.status !== 'connected' && b.status === 'connected') return 1;
+                        return a.name.localeCompare(b.name);
+                      })
+                      .map((instance) => (
+                        <ConnectionCard key={instance.id} instance={instance} />
+                      ))}
                   </div>
                 </div>
               )}
 
-              {/* Estado Vazio */}
+              {/* Mobile: Lista de Dispositivos */}
+              {instances.length > 0 && (
+                <div className="md:hidden space-y-4">
+                  {/* Separador */}
+                  <div className="border-t border-border pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-base font-semibold text-foreground">
+                        Dispositivos ({instances.length})
+                      </h2>
+                      <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        className="p-1.5 bg-muted/50 hover:bg-muted rounded-lg transition-colors disabled:opacity-50"
+                        title="Atualizar status"
+                      >
+                        <RefreshCw size={14} className={`${isRefreshing ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+
+                    {/* Lista de conexões */}
+                    <div className="space-y-2">
+                      {instances
+                        .sort((a, b) => {
+                          if (a.status === 'connected' && b.status !== 'connected') return -1;
+                          if (a.status !== 'connected' && b.status === 'connected') return 1;
+                          return a.name.localeCompare(b.name);
+                        })
+                        .map((instance) => (
+                          <ConnectionCard key={instance.id} instance={instance} />
+                        ))}
+                      
+                      {/* Botão para adicionar novo */}
+                      <div className="bg-card border border-border rounded-lg p-3">
+                        <div className="flex items-center justify-center h-16">
+                          <button
+                            onClick={() => setShowCreateModal(true)}
+                            className="flex items-center gap-2 px-3 py-2 bg-accent/10 hover:bg-accent/20 border border-accent/30 hover:border-accent/50 rounded-lg transition-all duration-200 text-accent font-medium text-sm"
+                          >
+                            <Plus size={16} />
+                            Conectar Novo WhatsApp
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Desktop: Estado Vazio */}
               {instances.length === 0 && (
-                <div className="bg-card border border-border rounded-xl p-8">
+                <div className="hidden md:block bg-card border border-border rounded-xl p-8">
                   <div className="text-center">
                     <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
                       <Phone size={24} className="text-muted-foreground" />
@@ -564,6 +702,31 @@ const ConexoesPage: React.FC = () => {
                     >
                       + Nova Conexão
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Mobile: Estado Vazio */}
+              {instances.length === 0 && (
+                <div className="md:hidden space-y-6">
+                  {/* Separador */}
+                  <div className="border-t border-border pt-6">
+                    <h2 className="text-lg font-semibold text-foreground mb-4">
+                      Dispositivos (0)
+                    </h2>
+
+                    {/* Card vazio intuitivo */}
+                    <div className="bg-card border border-border rounded-xl p-4">
+                      <div className="flex items-center justify-center h-20">
+                        <button
+                          onClick={() => setShowCreateModal(true)}
+                          className="flex items-center gap-3 px-4 py-3 bg-accent/10 hover:bg-accent/20 border border-accent/30 hover:border-accent/50 rounded-lg transition-all duration-200 text-accent font-medium"
+                        >
+                          <Plus size={20} />
+                          Conectar WhatsApp
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -653,83 +816,97 @@ const ConexoesPage: React.FC = () => {
 
       {/* Modal de QR Code */}
       {showQrModal && selectedInstance && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-card border border-border rounded-xl p-6 w-full max-w-md"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-foreground">Conectar WhatsApp</h2>
-              <button
-                onClick={() => setShowQrModal(false)}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="text-center space-y-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
-                  <Phone size={20} className="text-accent" />
-                </div>
-                <div className="text-left">
-                  <h3 className="text-sm font-medium text-foreground">{selectedInstance.name}</h3>
-                  <p className="text-xs text-muted-foreground">Aguardando conexão...</p>
-                </div>
+        <>
+          {/* Esconder menu mobile */}
+          <style>{`
+            nav.md\\:hidden {
+              display: none !important;
+            }
+          `}</style>
+          
+          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <h2 className="text-base sm:text-lg font-semibold text-foreground">Conectar WhatsApp</h2>
+                <button
+                  onClick={() => setShowQrModal(false)}
+                  className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              {selectedInstance.qrCode ? (
-                <div className="bg-white p-4 rounded-xl border-2 border-border">
-                  <img
-                    src={selectedInstance.qrCode}
-                    alt="QR Code WhatsApp"
-                    className="w-full max-w-[200px] mx-auto"
-                  />
+              <div className="text-center space-y-3 sm:space-y-4">
+                {/* Info da instância */}
+                <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-accent/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Phone size={16} className="text-accent sm:w-5 sm:h-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-medium text-foreground">{selectedInstance.name}</h3>
+                    <p className="text-xs text-muted-foreground">Aguardando conexão...</p>
+                  </div>
                 </div>
-              ) : (
-                <div className="bg-muted/20 border-2 border-dashed border-muted rounded-xl p-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent mx-auto mb-3"></div>
-                  <p className="text-sm text-muted-foreground">Gerando QR Code...</p>
-                </div>
-              )}
 
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <MessageCircle size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
-                  <div className="text-xs text-muted-foreground text-left">
-                    <p className="font-medium text-foreground mb-1">Como conectar:</p>
-                                         <ol className="space-y-1 list-decimal list-inside">
-                       <li>Abra o WhatsApp no seu celular</li>
-                       <li>Toque em Mais opções → Dispositivos conectados</li>
-                       <li>Toque em "Conectar um dispositivo"</li>
-                       <li>Aponte a câmera para este QR code</li>
-                     </ol>
+                {/* QR Code */}
+                {selectedInstance.qrCode ? (
+                  <div className="bg-white p-3 sm:p-4 rounded-xl border-2 border-border">
+                    <img
+                      src={selectedInstance.qrCode}
+                      alt="QR Code WhatsApp"
+                      className="w-full max-w-[160px] sm:max-w-[200px] mx-auto"
+                    />
+                  </div>
+                ) : (
+                  <div className="bg-muted/20 border-2 border-dashed border-muted rounded-xl p-6 sm:p-8">
+                    <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-accent mx-auto mb-2 sm:mb-3"></div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Gerando QR Code...</p>
+                  </div>
+                )}
+
+                {/* Instruções */}
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-2.5 sm:p-3">
+                  <div className="flex items-start gap-2">
+                    <MessageCircle size={14} className="text-blue-500 mt-0.5 flex-shrink-0" />
+                    <div className="text-xs text-muted-foreground text-left">
+                      <p className="font-medium text-foreground mb-1">Como conectar:</p>
+                      <ol className="space-y-0.5 sm:space-y-1 list-decimal list-inside text-xs">
+                        <li>Abra o WhatsApp no seu celular</li>
+                        <li>Toque em Mais opções → Dispositivos conectados</li>
+                        <li>Toque em "Conectar um dispositivo"</li>
+                        <li>Aponte a câmera para este QR code</li>
+                      </ol>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex justify-center gap-3 mt-6">
-              <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="px-4 py-2 bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50"
-              >
-                <RefreshCw size={14} className={`${isRefreshing ? 'animate-spin' : ''}`} />
-                {isRefreshing ? 'Verificando...' : 'Verificar Status'}
-              </button>
-              <button
-                onClick={() => setShowQrModal(false)}
-                className="px-6 py-2 bg-muted text-muted-foreground hover:bg-muted/80 rounded-lg transition-colors text-sm font-medium"
-              >
-                Fechar
-              </button>
-            </div>
-          </motion.div>
-        </div>
+              {/* Botões */}
+              <div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3 mt-4 sm:mt-6">
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="px-3 sm:px-4 py-2 bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw size={12} className={`${isRefreshing ? 'animate-spin' : ''} sm:w-3.5 sm:h-3.5`} />
+                  {isRefreshing ? 'Verificando...' : 'Verificar Status'}
+                </button>
+                <button
+                  onClick={() => setShowQrModal(false)}
+                  className="px-3 sm:px-6 py-2 bg-muted text-muted-foreground hover:bg-muted/80 rounded-lg transition-colors text-xs sm:text-sm font-medium"
+                >
+                  Fechar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </>
       )}
     </div>
   );

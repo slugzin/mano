@@ -46,10 +46,10 @@ export function KanbanCard({ empresa, onDisparar, isAContatar, isDragging }: Kan
       `}
     >
       {/* Card Header */}
-      <div className="p-4 border-b border-border">
+      <div className="p-3 md:p-4 border-b border-border">
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
-            <h3 className="text-base font-semibold text-foreground line-clamp-2 mb-2">{empresa.titulo}</h3>
+            <h3 className="text-sm md:text-base font-semibold text-foreground line-clamp-2 mb-2">{empresa.titulo}</h3>
             <div className="flex items-center gap-2">
               <span className="px-2 py-1 bg-accent/10 text-accent text-xs rounded-full font-medium">
                 {empresa.categoria || 'Sem categoria'}
@@ -62,7 +62,7 @@ export function KanbanCard({ empresa, onDisparar, isAContatar, isDragging }: Kan
         <div className="flex items-center gap-2 mb-3">
           <div className="flex items-center gap-1">
             <Star size={14} className="text-yellow-500" />
-            <span className="text-foreground font-medium text-sm">{empresa.avaliacao || 'N/A'}</span>
+            <span className="text-foreground font-medium text-xs md:text-sm">{empresa.avaliacao || 'N/A'}</span>
           </div>
           {empresa.total_avaliacoes > 0 && (
             <span className="text-muted-foreground text-xs">
@@ -81,7 +81,7 @@ export function KanbanCard({ empresa, onDisparar, isAContatar, isDragging }: Kan
       </div>
 
       {/* Card Body */}
-      <div className="p-4">
+      <div className="p-3 md:p-4">
         {/* Contatos */}
         <div className="space-y-2 mb-4">
           {empresa.telefone && (
@@ -89,7 +89,7 @@ export function KanbanCard({ empresa, onDisparar, isAContatar, isDragging }: Kan
               <Phone size={14} className="text-green-500" />
               <a 
                 href={`tel:${empresa.telefone}`}
-                className="text-green-500 hover:text-green-400 transition-colors text-sm"
+                className="text-green-500 hover:text-green-400 transition-colors text-xs md:text-sm"
               >
                 {empresa.telefone}
               </a>
@@ -130,7 +130,7 @@ export function KanbanCard({ empresa, onDisparar, isAContatar, isDragging }: Kan
           <button
             onClick={() => onDisparar(empresa)}
             className="
-              w-full px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium 
+              w-full px-3 md:px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium 
               hover:bg-accent/90 transition-all duration-300
               transform hover:scale-[1.02]
               relative overflow-hidden group/btn

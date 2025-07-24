@@ -25,7 +25,7 @@ export function KanbanColumn({ column, onDisparar, isOver, minWidthClass }: Kanb
     `}>
       {/* Cabeçalho da Coluna */}
       <div className={`
-        p-4 rounded-t-xl bg-gradient-to-r ${column.color} shadow-sm
+        p-3 md:p-4 rounded-t-xl bg-gradient-to-r ${column.color} shadow-sm
         transition-all duration-300
         ${isOver ? 'shadow-lg shadow-accent/20' : ''}
       `}>
@@ -59,7 +59,7 @@ export function KanbanColumn({ column, onDisparar, isOver, minWidthClass }: Kanb
       <div
         ref={setNodeRef}
         className={`
-          flex-1 p-3 space-y-3 bg-card/50 backdrop-blur-sm border-x border-b border-border rounded-b-xl overflow-y-auto
+          flex-1 p-2 md:p-3 space-y-2 md:space-y-3 bg-card/50 backdrop-blur-sm border-x border-b border-border rounded-b-xl overflow-y-auto
           transition-colors duration-300
           ${isOver ? 'bg-card/70 border-accent/30' : ''}
         `}

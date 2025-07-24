@@ -14,7 +14,6 @@ import {
   Mail,
   BarChart3,
   Grid,
-  Clock,
   AlertCircle,
   CheckCircle,
   Eye,
@@ -25,6 +24,7 @@ import { buscarEstatisticasFunil, type EstatisticasFunil } from '../../services/
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
+import LoadingScreen from '../../components/ui/LoadingScreen';
 
 interface UltimoDisparo {
   id: string;
@@ -42,6 +42,7 @@ const DashboardPage: React.FC = () => {
   const [stats, setStats] = useState<EstatisticasFunil | null>(null);
   const [ultimosDisparos, setUltimosDisparos] = useState<UltimoDisparo[]>([]);
   const [totalDisparos, setTotalDisparos] = useState(0);
+  const [taxaResposta, setTaxaResposta] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -58,29 +59,78 @@ const DashboardPage: React.FC = () => {
         setStats(result.data);
       }
 
-      // Carregar últimos disparos
-      const { data: disparos, error } = await supabase
+      // Carregar campanhas de disparo
+      const { data: campanhas, error: campanhasError } = await supabase
         .from('campanhas_disparo')
         .select('*')
         .order('criado_em', { ascending: false })
         .limit(5);
 
-      if (error) {
-        console.error('Erro ao carregar disparos:', error);
-      } else {
-        setUltimosDisparos(disparos || []);
+      if (campanhasError) {
+        console.error('Erro ao carregar campanhas:', campanhasError);
+      } else if (campanhas) {
+        // Para cada campanha, buscar dados reais da tabela disparos_agendados
+        const ultimosDisparosComMetricas = await Promise.all(
+          campanhas.map(async (campanha) => {
+            const { data: disparosAgendados, error: disparosError } = await supabase
+              .from('disparos_agendados')
+              .select('status')
+              .eq('conexao_id', campanha.conexao_id);
+
+            if (disparosError) {
+              console.error('Erro ao carregar disparos agendados:', disparosError);
+              return {
+                ...campanha,
+                total_enviados: 0,
+                total_erros: 0,
+                total_empresas: 0
+              };
+            }
+
+            const total = disparosAgendados?.length || 0;
+            const enviados = disparosAgendados?.filter(d => d.status === 'enviado').length || 0;
+            const erros = disparosAgendados?.filter(d => d.status === 'erro').length || 0;
+
+            return {
+              ...campanha,
+              total_enviados: enviados,
+              total_erros: erros,
+              total_empresas: total
+            };
+          })
+        );
+
+        setUltimosDisparos(ultimosDisparosComMetricas);
       }
 
-      // Carregar total de disparos (soma de todas as empresas contactadas)
-      const { data: totalData, error: totalError } = await supabase
-        .from('campanhas_disparo')
-        .select('total_empresas');
+      // Carregar total de disparos reais (apenas os enviados)
+      const { data: totalDisparosData, error: totalDisparosError } = await supabase
+        .from('disparos_agendados')
+        .select('status')
+        .eq('status', 'enviado');
 
-      if (totalError) {
-        console.error('Erro ao carregar total de disparos:', totalError);
+      if (totalDisparosError) {
+        console.error('Erro ao carregar total de disparos:', totalDisparosError);
       } else {
-        const total = totalData?.reduce((acc, curr) => acc + (curr.total_empresas || 0), 0) || 0;
+        const total = totalDisparosData?.length || 0;
         setTotalDisparos(total);
+      }
+
+      // Calcular taxa de resposta baseada nas conversas
+      const { data: conversasData, error: conversasError } = await supabase
+        .from('conversas')
+        .select('from_me, telefone');
+
+      if (conversasError) {
+        console.error('Erro ao carregar conversas:', conversasError);
+      } else {
+        // Contar mensagens enviadas (from_me = true) e respostas recebidas (from_me = false)
+        const mensagensEnviadas = conversasData?.filter(c => c.from_me === true).length || 0;
+        const respostasRecebidas = conversasData?.filter(c => c.from_me === false).length || 0;
+        
+        // Calcular taxa de resposta (respostas / mensagens enviadas * 100)
+        const taxa = mensagensEnviadas > 0 ? (respostasRecebidas / mensagensEnviadas) * 100 : 0;
+        setTaxaResposta(Math.round(taxa * 10) / 10); // Arredondar para 1 casa decimal
       }
       
     } catch (error) {
@@ -140,14 +190,7 @@ const DashboardPage: React.FC = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background p-6 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Carregando dashboard...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen page="dashboard" />;
   }
 
   const formatPercentage = (value: number) => {
@@ -156,169 +199,104 @@ const DashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-screen max-w-screen bg-background overflow-x-hidden">
-      <div className="w-full px-0">
-        <PageHeader
-          title="Dashboard"
-          subtitle="Acompanhe suas métricas e acesse rapidamente as principais ações do seu CRM."
-          icon={<Grid size={32} className="text-primary" />}
-        />
+    <div className="min-h-full bg-background p-2 md:p-6">
+      <div className="page-content-wrapper">
+        {/* Header Mobile */}
+        <div className="md:hidden">
+          <div className="flex items-center gap-3 p-3 border-b border-border bg-background">
+            <Grid className="text-primary" size={20} />
+            <div>
+              <h1 className="text-base font-medium text-foreground">Dashboard</h1>
+              <p className="text-xs text-muted-foreground">Acompanhe suas métricas</p>
+            </div>
+          </div>
+        </div>
 
-        {/* KPIs Principais */}
-        <div className="grid grid-cols-2 gap-2 mb-6 sm:grid-cols-2 lg:grid-cols-4 px-2 sm:px-0">
+        {/* Header Desktop */}
+        <div className="hidden md:block">
+          <PageHeader
+            title="Dashboard"
+            subtitle="Acompanhe suas métricas e acesse rapidamente as principais ações do seu CRM."
+            icon={<Grid size={32} className="text-primary" />}
+          />
+        </div>
+
+        {/* KPIs Principais - Responsivo */}
+        <div className="grid grid-cols-2 gap-2 md:gap-4 mb-4 md:mb-6 w-full mt-4">
           {/* Empresas Buscadas */}
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2 sm:p-3 md:p-4">
-            <div className="flex items-center gap-1 sm:gap-2 md:gap-3 mb-1 md:mb-2">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg md:rounded-xl p-3 md:p-4">
+            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
                 <Target size={16} className="text-emerald-500 md:text-[20px]" />
               </div>
               <div>
-                <span className="text-base sm:text-lg md:text-2xl font-bold text-emerald-500">{stats?.totalEmpresas || 0}</span>
-                <span className="text-xs text-muted-foreground ml-1">empresas</span>
+                <span className="text-lg md:text-2xl font-bold text-emerald-500">{stats?.totalEmpresas || 0}</span>
+                <span className="text-xs md:text-sm text-muted-foreground ml-1">empresas</span>
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Empresas Buscadas</h3>
-            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 md:mt-1">Total de empresas encontradas</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-1 md:mt-1">Total de empresas encontradas</p>
           </div>
 
           {/* Taxa de Resposta */}
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-2 sm:p-3 md:p-4">
-            <div className="flex items-center gap-1 sm:gap-2 md:gap-3 mb-1 md:mb-2">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg md:rounded-xl p-3 md:p-4">
+            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
                 <BarChart3 size={16} className="text-blue-500 md:text-[20px]" />
               </div>
               <div>
-                <span className="text-base sm:text-lg md:text-2xl font-bold text-blue-500">0.0%</span>
-                <span className="text-xs text-muted-foreground ml-1">taxa</span>
+                <span className="text-lg md:text-2xl font-bold text-blue-500">{taxaResposta}%</span>
+                <span className="text-xs md:text-sm text-muted-foreground ml-1">taxa</span>
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Taxa de Resposta</h3>
-            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 md:mt-1">Média de respostas recebidas</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-1 md:mt-1">Média de respostas recebidas</p>
           </div>
 
           {/* Negócios Ganhos */}
-          <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-2 sm:p-3 md:p-4">
-            <div className="flex items-center gap-1 sm:gap-2 md:gap-3 mb-1 md:mb-2">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
+          <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg md:rounded-xl p-3 md:p-4">
+            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
                 <Star size={16} className="text-purple-500 md:text-[20px]" />
               </div>
               <div>
-                <span className="text-base sm:text-lg md:text-2xl font-bold text-purple-500">1</span>
-                <span className="text-xs text-muted-foreground ml-1">negócios</span>
+                <span className="text-lg md:text-2xl font-bold text-purple-500">1</span>
+                <span className="text-xs md:text-sm text-muted-foreground ml-1">negócios</span>
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Negócios Ganhos</h3>
-            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 md:mt-1">Conversões realizadas</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-1 md:mt-1">Conversões realizadas</p>
           </div>
 
           {/* Total de Disparos */}
-          <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-2 sm:p-3 md:p-4">
-            <div className="flex items-center gap-1 sm:gap-2 md:gap-3 mb-1 md:mb-2">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
+          <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg md:rounded-xl p-3 md:p-4">
+            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
                 <MessageCircle size={16} className="text-orange-500 md:text-[20px]" />
               </div>
               <div>
-                <span className="text-base sm:text-lg md:text-2xl font-bold text-orange-500">{totalDisparos}</span>
-                <span className="text-xs text-muted-foreground ml-1">disparos</span>
+                <span className="text-lg md:text-2xl font-bold text-orange-500">{totalDisparos}</span>
+                <span className="text-xs md:text-sm text-muted-foreground ml-1">disparos</span>
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Total de Disparos</h3>
-            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 md:mt-1">Mensagens enviadas</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-1 md:mt-1">Mensagens enviadas</p>
           </div>
         </div>
 
-        {/* Últimos Disparos */}
-        <div className="mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2 sm:gap-0">
-            <h2 className="text-lg font-semibold text-foreground">Últimos Disparos</h2>
-            <button
-              onClick={() => navigate('/admin/campanhas')}
-              className="text-sm text-accent hover:text-accent/80 transition-colors flex items-center gap-1"
-            >
-              Ver todos
-              <ChevronRight size={14} />
-            </button>
+        {/* Ações Rápidas - Mobile Primeiro */}
+        <div className="mb-4 md:mb-6">
+          <div className="border-t border-border pt-6 mb-4">
+            <h2 className="text-base md:text-lg font-semibold text-foreground mb-3 md:mb-4">Ações Rápidas</h2>
           </div>
-          
-          {ultimosDisparos.length === 0 ? (
-            <div className="bg-card border border-border rounded-xl p-6 text-center">
-              <MessageCircle className="mx-auto h-12 w-12 text-muted-foreground mb-3" />
-              <h3 className="text-sm font-medium text-foreground mb-1">Nenhum disparo realizado</h3>
-              <p className="text-xs text-muted-foreground">Comece criando sua primeira campanha</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {ultimosDisparos.map((disparo) => (
-                <button
-                  key={disparo.id}
-                  onClick={() => navigate('/admin/campanhas')}
-                  className="w-full bg-card hover:bg-accent/5 border border-border hover:border-accent/50 rounded-xl p-4 transition-all duration-200 group text-left"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 bg-accent/10 rounded-lg flex items-center justify-center">
-                          <MessageCircle size={16} className="text-accent" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-medium text-foreground truncate">
-                            {disparo.nome || 'Campanha sem nome'}
-                          </h3>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(disparo.criado_em)} • {disparo.conexao_id}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-4 ml-11">
-                        <div className="flex items-center gap-1">
-                          <Users size={12} className="text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">
-                            {disparo.total_empresas} empresas
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center gap-1">
-                          <CheckCircle size={12} className="text-green-600" />
-                          <span className="text-xs text-green-600">
-                            {disparo.total_enviados} enviados
-                          </span>
-                        </div>
-                        
-                        {disparo.total_erros > 0 && (
-                          <div className="flex items-center gap-1">
-                            <AlertCircle size={12} className="text-red-600" />
-                            <span className="text-xs text-red-600">
-                              {disparo.total_erros} erros
-                            </span>
-                          </div>
-                        )}
-                        
-                        <div className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(disparo.status)}`}>
-                          {getStatusLabel(disparo.status)}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <ChevronRight size={16} className="text-muted-foreground group-hover:text-accent transition-colors" />
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Ações Rápidas */}
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Ações Rápidas</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
             {/* Buscar Leads */}
             <button
               onClick={() => navigate('/admin/leads')}
-              className="bg-card hover:bg-accent/5 border border-border hover:border-accent/50 rounded-xl p-4 flex items-center gap-4 transition-all duration-200 group text-left"
+              className="bg-card hover:bg-accent/5 border border-border hover:border-accent/50 rounded-lg md:rounded-xl p-3 md:p-4 flex items-center gap-3 md:gap-4 transition-all duration-200 group text-left"
             >
-              <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-110">
-                <Target size={24} className="text-accent" />
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-accent/10 rounded-lg md:rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-110">
+                <Target size={18} className="md:w-6 md:h-6 text-accent" />
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">Buscar Novos Leads</p>
@@ -329,10 +307,10 @@ const DashboardPage: React.FC = () => {
             {/* Iniciar Campanha */}
             <button
               onClick={() => navigate('/admin/disparos')}
-              className="bg-card hover:bg-accent/5 border border-border hover:border-accent/50 rounded-xl p-4 flex items-center gap-4 transition-all duration-200 group text-left"
+              className="bg-card hover:bg-accent/5 border border-border hover:border-accent/50 rounded-lg md:rounded-xl p-3 md:p-4 flex items-center gap-3 md:gap-4 transition-all duration-200 group text-left"
             >
-              <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-110">
-                <MessageCircle size={24} className="text-accent" />
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-accent/10 rounded-lg md:rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-110">
+                <MessageCircle size={18} className="md:w-6 md:h-6 text-accent" />
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">Iniciar Campanha</p>
@@ -343,10 +321,10 @@ const DashboardPage: React.FC = () => {
             {/* Gerenciar Conexões */}
             <button
               onClick={() => navigate('/admin/conexoes')}
-              className="bg-card hover:bg-accent/5 border border-border hover:border-accent/50 rounded-xl p-4 flex items-center gap-4 transition-all duration-200 group text-left"
+              className="bg-card hover:bg-accent/5 border border-border hover:border-accent/50 rounded-lg md:rounded-xl p-3 md:p-4 flex items-center gap-3 md:gap-4 transition-all duration-200 group text-left"
             >
-              <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-110">
-                <Phone size={24} className="text-accent" />
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-accent/10 rounded-lg md:rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-110">
+                <Phone size={18} className="md:w-6 md:h-6 text-accent" />
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">Gerenciar Conexões</p>
@@ -357,10 +335,10 @@ const DashboardPage: React.FC = () => {
             {/* Ver Relatórios */}
             <button
               onClick={() => navigate('/admin/fluxos')}
-              className="bg-card hover:bg-accent/5 border border-border hover:border-accent/50 rounded-xl p-4 flex items-center gap-4 transition-all duration-200 group text-left"
+              className="bg-card hover:bg-accent/5 border border-border hover:border-accent/50 rounded-lg md:rounded-xl p-3 md:p-4 flex items-center gap-3 md:gap-4 transition-all duration-200 group text-left"
             >
-              <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-110">
-                <BarChart3 size={24} className="text-accent" />
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-accent/10 rounded-lg md:rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-110">
+                <BarChart3 size={18} className="md:w-6 md:h-6 text-accent" />
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">Ver Relatórios</p>
@@ -370,18 +348,78 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Atividade Recente */}
-        <div>
-          <h2 className="text-lg font-semibold text-foreground mb-4">Atividade Recente</h2>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center justify-center py-8">
-              <div className="text-center">
-                <Clock size={32} className="text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Nenhuma atividade recente</p>
-              </div>
+        {/* Últimos Disparos - Mobile Segundo */}
+        <div className="mb-4 md:mb-6">
+          <div className="border-t border-border pt-6 mb-4">
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <h2 className="text-base md:text-lg font-semibold text-foreground">Últimos Disparos</h2>
+              <button
+                onClick={() => navigate('/admin/campanhas')}
+                className="text-xs md:text-sm text-accent hover:text-accent/80 transition-colors flex items-center gap-1"
+              >
+                Ver todos
+                <ChevronRight size={12} className="md:w-3.5 md:h-3.5" />
+              </button>
             </div>
           </div>
+          
+          {ultimosDisparos.length === 0 ? (
+            <div className="bg-card border border-border rounded-lg md:rounded-xl p-4 md:p-6 text-center">
+              <MessageCircle className="mx-auto h-8 w-8 md:h-12 md:w-12 text-muted-foreground mb-2 md:mb-3" />
+              <h3 className="text-sm font-medium text-foreground mb-1">Nenhum disparo realizado</h3>
+              <p className="text-xs text-muted-foreground">Comece criando sua primeira campanha</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+              {ultimosDisparos.map((disparo) => (
+                <button
+                  key={disparo.id}
+                  onClick={() => navigate('/admin/campanhas')}
+                  className="bg-card hover:bg-accent/5 border border-border hover:border-accent/50 rounded-lg md:rounded-xl p-3 md:p-4 flex items-center gap-3 md:gap-4 transition-all duration-200 group text-left"
+                >
+                  <div className="w-10 h-10 md:w-12 md:h-12 bg-accent/10 rounded-lg md:rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-110">
+                    <MessageCircle size={18} className="md:w-6 md:h-6 text-accent" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-medium text-foreground truncate mb-1">{disparo.nome}</h3>
+                    <p className="text-xs text-muted-foreground mb-2">{formatDate(disparo.criado_em)}</p>
+                    
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 bg-muted/30 rounded-lg px-1.5 py-0.5">
+                        <Users size={11} className="text-muted-foreground" />
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {disparo.total_empresas}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 rounded-lg px-1.5 py-0.5">
+                        <CheckCircle size={11} className="text-green-600" />
+                        <span className="text-xs font-medium text-green-600">
+                          {disparo.total_enviados}
+                        </span>
+                      </div>
+                      
+                      {disparo.total_erros > 0 && (
+                        <div className="flex items-center gap-1 bg-red-50 dark:bg-red-900/20 rounded-lg px-1.5 py-0.5">
+                          <AlertCircle size={11} className="text-red-600" />
+                          <span className="text-xs font-medium text-red-600">
+                            {disparo.total_erros}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className={`mt-2 px-2 py-0.5 rounded-lg text-xs font-medium inline-block ${getStatusColor(disparo.status)}`}>
+                      {getStatusLabel(disparo.status)}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+
+
       </div>
     </div>
   );

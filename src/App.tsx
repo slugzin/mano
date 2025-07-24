@@ -19,6 +19,7 @@ import LoginPage from './pages/LoginPage';
 import DisparosHistoricoPage from './pages/admin/DisparosHistoricoPage';
 import ConversasPage from './pages/admin/ConversasPage';
 import FluxosPage from './pages/admin/FluxosPage';
+import ProfilePage from './pages/admin/ProfilePage';
 
 function App() {
   return (
@@ -44,6 +45,7 @@ function App() {
                 <Route path="conexoes" element={<ConexoesPage />} />
                 <Route path="campanhas" element={<DisparosHistoricoPage />} />
                 <Route path="conversas" element={<ConversasPage />} />
+                <Route path="perfil" element={<ProfilePage />} />
               </Route>
               
               {/* Rota catch-all para redirecionar para home */}
