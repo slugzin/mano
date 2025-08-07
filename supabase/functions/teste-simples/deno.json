@@ -1,0 +1,13 @@
+// Isso é um arquivo de configuração chamado deno.json utilizado em projetos que rodam com o Deno (um runtime para JavaScript e TypeScript).
+// Ele define importações de módulos (neste caso, a biblioteca padrão do Deno na versão 0.168.0)
+// e tarefas (tasks), como o comando para iniciar o projeto com permissões de rede e variáveis de ambiente.
+// Exemplo real do arquivo:
+{
+  "imports": {
+    "std/": "https://deno.land/std@0.168.0/"
+  },
+  "tasks": {
+    "start": "deno run --allow-net --allow-env index.ts"
+  }
+} 
+ 

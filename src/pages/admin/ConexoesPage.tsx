@@ -70,11 +70,18 @@ const ConexoesPage: React.FC = () => {
     if (result.success && result.data) {
       const newInstances = result.data;
       
+      console.log('🔍 Debug - Instâncias carregadas:', newInstances.map(inst => ({ name: inst.name, status: inst.status })));
+      console.log('🔍 Debug - Total de instâncias conectadas:', newInstances.filter(inst => inst.status === 'connected').length);
+      
       // Verificar se alguma instância mudou de status para conectada
       if (selectedInstance && showQrModal) {
         const updatedInstance = newInstances.find(inst => inst.id === selectedInstance.id);
         if (updatedInstance && updatedInstance.status === 'connected' && selectedInstance.status !== 'connected') {
           console.log('🎉 Conexão estabelecida com sucesso!');
+          
+          // Configurar webhook automaticamente
+          await configurarWebhookAutomatico(updatedInstance.name);
+          
           // Fechar modal de QR Code automaticamente
           setTimeout(() => {
             setShowQrModal(false);
@@ -125,33 +132,47 @@ const ConexoesPage: React.FC = () => {
             
             console.log(`📱 Atualizando ${instance.name}: ${connectionStatus} → ${newStatus}`);
             
-            // Atualizar no banco de dados
-            const { error } = await supabase
-              .from('whatsapp_instances')
-              .update({
-                status: newStatus,
-                owner_jid: ownerJid,
-                profile_name: profileName,
-                profile_pic_url: profilePicUrl,
-                last_sync: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .eq('instance_id', id);
+            // Atualizar no banco de dados apenas se a instância pertence ao usuário atual
+            const { data: user } = await supabase.auth.getUser();
+            if (user.user) {
+              const { error } = await supabase
+                .from('whatsapp_instances')
+                .update({
+                  status: newStatus,
+                  owner_jid: ownerJid,
+                  profile_name: profileName,
+                  profile_pic_url: profilePicUrl,
+                  last_sync: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+                .eq('instance_id', id)
+                .eq('user_id', user.user.id); // Filtrar apenas instâncias do usuário atual
 
-            if (error) {
-              console.error(`❌ Erro ao atualizar ${instance.name}:`, error);
-            } else {
-              console.log(`✅ ${instance.name} atualizado com sucesso`);
-              connectionsUpdated++;
-              if (newStatus === 'connected') {
-                connectionsConnected++;
+              if (error) {
+                console.error(`❌ Erro ao atualizar ${instance.name}:`, error);
+              } else {
+                console.log(`✅ ${instance.name} atualizado com sucesso`);
+                connectionsUpdated++;
+                if (newStatus === 'connected') {
+                  connectionsConnected++;
+                  
+                  // Configurar webhook automaticamente quando instância for conectada
+                  await configurarWebhookAutomatico(instance.name);
+                }
               }
             }
           }
           
-          // Mostrar feedback visual
-          if (connectionsConnected > 0) {
-            setUpdateMessage(`🎉 ${connectionsConnected} conexão(ões) ativa(s)!`);
+          // Recarregar as instâncias do banco com os novos status
+          await loadInstances();
+          
+          // Mostrar feedback visual baseado no estado atualizado das instâncias
+          const currentConnectedInstances = instances.filter(inst => inst.status === 'connected').length;
+          console.log('🔍 Debug - Instâncias conectadas:', currentConnectedInstances);
+          console.log('🔍 Debug - Todas as instâncias:', instances.map(inst => ({ name: inst.name, status: inst.status })));
+          
+          if (currentConnectedInstances > 0) {
+            setUpdateMessage(`🎉 ${currentConnectedInstances} conexão(ões) ativa(s)!`);
           } else {
             setUpdateMessage(`🔄 ${connectionsUpdated} conexão(ões) atualizada(s)`);
           }
@@ -162,9 +183,6 @@ const ConexoesPage: React.FC = () => {
       } else {
         console.error('❌ Erro na requisição de atualização:', response.status);
       }
-      
-      // Recarregar as instâncias do banco com os novos status
-      await loadInstances();
       
       console.log('🔄 Atualização concluída!');
     } catch (error) {
@@ -261,6 +279,48 @@ const ConexoesPage: React.FC = () => {
     } else {
       console.error('Erro ao deletar:', deleteResult.error);
       alert('Erro ao deletar conexão: ' + deleteResult.error);
+    }
+  };
+
+  // Função para configurar webhook automaticamente quando conexão for estabelecida
+  const configurarWebhookAutomatico = async (instanceName: string) => {
+    try {
+      console.log('🔧 Configurando webhook automaticamente para:', instanceName);
+      
+      // Fazer requisição para configurar webhook
+      const response = await fetch(`https://goqhudvrndtmxhbblrqa.supabase.co/functions/v1/atualizar-webhook/${encodeURIComponent(instanceName)}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvcWh1ZHZybmR0bXhoYmJscnFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTMwOTcsImV4cCI6MjA2ODI2OTA5N30.w3-CFhPBpSSSNCoLAWGzFlf_vtEBjPRRoytUzuP5SQM',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          webhook: {
+            enabled: true,
+            url: "https://goqhudvrndtmxhbblrqa.supabase.co/functions/v1/webhook-mensagens",
+            headers: {
+              "autorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvcWh1ZHZybmR0bXhoYmJscnFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTMwOTcsImV4cCI6MjA2ODI2OTA5N30.w3-CFhPBpSSSNCoLAWGzFlf_vtEBjPRRoytUzuP5SQM",
+              "Content-Type": "application/json"
+            },
+            byEvents: false,
+            base64: false,
+            events: [
+              "MESSAGES_UPSERT"
+            ]
+          }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Webhook configurado com sucesso:', result);
+      } else {
+        console.error('❌ Erro ao configurar webhook:', response.status);
+        const errorText = await response.text();
+        console.error('Detalhes do erro:', errorText);
+      }
+    } catch (error) {
+      console.error('💥 Erro ao configurar webhook automaticamente:', error);
     }
   };
 

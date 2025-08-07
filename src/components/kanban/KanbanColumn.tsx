@@ -7,11 +7,12 @@ import type { EmpresaBanco } from '../../services/edgeFunctions';
 interface KanbanColumnProps {
   column: IKanbanColumn;
   onDisparar: (empresa: EmpresaBanco) => void;
+  onAbrirDetalhes?: (empresa: EmpresaBanco) => void;
   isOver?: boolean;
   minWidthClass?: string;
 }
 
-export function KanbanColumn({ column, onDisparar, isOver, minWidthClass }: KanbanColumnProps) {
+export function KanbanColumn({ column, onDisparar, onAbrirDetalhes, isOver, minWidthClass }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id: column.id
   });
@@ -70,6 +71,7 @@ export function KanbanColumn({ column, onDisparar, isOver, minWidthClass }: Kanb
             key={empresa.id}
             empresa={empresa}
             onDisparar={onDisparar}
+            onAbrirDetalhes={onAbrirDetalhes}
             isAContatar={column.id === 'a_contatar'}
           />
         ))}

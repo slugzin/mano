@@ -126,7 +126,7 @@ export function useKanban(empresas: EmpresaBanco[]) {
 
   // Função para disparar mensagem - redireciona para página de disparos
   const dispararMensagem = useCallback((empresa: EmpresaBanco) => {
-    console.log('🚀 Disparando mensagem para empresa:', empresa.titulo);
+    console.log('🚀 Disparando mensagem para empresa:', empresa.empresa_nome);
     
     // Redirecionar para a página de disparos com dados da empresa
     navigate('/admin/disparos', {
@@ -137,9 +137,16 @@ export function useKanban(empresas: EmpresaBanco[]) {
     });
   }, [navigate]);
 
+  // Função para abrir detalhes da empresa
+  const abrirDetalhesEmpresa = useCallback((empresa: EmpresaBanco) => {
+    console.log('👁️ Abrindo detalhes da empresa:', empresa.empresa_nome);
+    // Esta função será implementada na página que usa o hook
+  }, []);
+
   return {
     state,
     moveEmpresa,
-    dispararMensagem
+    dispararMensagem,
+    abrirDetalhesEmpresa
   };
 } 

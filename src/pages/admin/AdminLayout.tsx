@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNewUser } from '../../hooks/useNewUser';
+import WelcomeMessage from '../../components/auth/WelcomeMessage';
 import {
   LayoutDashboard,
   Settings,
@@ -21,7 +24,41 @@ import { ThemeSwitcher } from '../../components/ui/ThemeSwitcher';
 const AdminLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { signOut, profile, initializeUserData } = useAuth();
+  const { isNewUser, isChecking } = useNewUser();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login');
+  };
+
+  // Mostrar mensagem de boas-vindas para novos usuários
+  React.useEffect(() => {
+    if (!isChecking && isNewUser) {
+      setShowWelcome(true);
+    }
+  }, [isNewUser, isChecking]);
+
+  const handleInitializeData = async () => {
+    setIsInitializing(true);
+    try {
+      const result = await initializeUserData();
+      if (result.error) {
+        console.error('Erro ao inicializar dados:', result.error);
+      } else {
+        setShowWelcome(false);
+        // Recarregar a página para mostrar os novos dados
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Erro ao inicializar dados:', error);
+    } finally {
+      setIsInitializing(false);
+    }
+  };
 
   const menuItems = [
     {
@@ -78,9 +115,9 @@ const AdminLayout: React.FC = () => {
   const bottomNavItems = [
     { icon: <LayoutDashboard size={20} />, label: 'Dash', path: '/admin' },
     { icon: <Target size={20} />, label: 'Leads', path: '/admin/leads' },
+    { icon: <Building size={20} />, label: 'Empresas', path: '/admin/empresas' },
     { icon: <Rocket size={20} />, label: 'Disparos', path: '/admin/disparos' },
-    { icon: <MessageCircle size={20} />, label: 'Conversas', path: '/admin/conversas' },
-    { icon: <User size={20} />, label: 'Perfil', path: '/admin/perfil' },
+    { icon: <BarChart3 size={20} />, label: 'Fluxos', path: '/admin/fluxos' },
   ];
 
   return (
@@ -185,7 +222,7 @@ const AdminLayout: React.FC = () => {
 
           <div className={`p-3 border-t border-border ${!isExpanded ? 'px-2' : ''}`}>
             <button
-              onClick={() => {}}
+              onClick={handleLogout}
               className={`
                 flex items-center w-full text-muted-foreground 
                 hover:text-foreground hover:bg-destructive/10 
@@ -246,6 +283,15 @@ const AdminLayout: React.FC = () => {
           ))}
         </div>
       </nav>
+
+      {/* Modal de boas-vindas para novos usuários */}
+      {showWelcome && (
+        <WelcomeMessage
+          onClose={() => setShowWelcome(false)}
+          onInitializeData={handleInitializeData}
+          isInitializing={isInitializing}
+        />
+      )}
     </div>
   );
 };

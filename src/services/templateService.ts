@@ -15,9 +15,16 @@ export const templateService = {
     try {
       console.log('📝 Buscando templates...');
       
+      // Pegar o usuário atual
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        return { success: false, error: 'Usuário não autenticado' };
+      }
+      
       const { data, error } = await supabase
         .from('message_templates')
         .select('*')
+        .eq('user_id', user.user.id) // Filtrar apenas templates do usuário atual
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -38,9 +45,15 @@ export const templateService = {
     try {
       console.log('📝 Criando template:', template.name);
       
+      // Pegar o usuário atual
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        return { success: false, error: 'Usuário não autenticado' };
+      }
+      
       const { data, error } = await supabase
         .from('message_templates')
-        .insert(template)
+        .insert({ ...template, user_id: user.user.id })
         .select()
         .single();
 

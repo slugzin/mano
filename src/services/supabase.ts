@@ -1,27 +1,88 @@
 import { supabase } from '../lib/supabase';
 import { Lead, Empresa, Campanha, BaseDados, DashboardStats, LeadForm, EmpresaForm, CampanhaForm } from '../types';
 
+// Interceptor para requisições com retry automático
+const withAuthRetry = async <T>(
+  requestFn: () => Promise<T>,
+  maxRetries: number = 2
+): Promise<T> => {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await requestFn();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Verificar se é erro de autenticação
+      if (error?.message?.includes('JWT') || 
+          error?.message?.includes('token') || 
+          error?.message?.includes('unauthorized') ||
+          error?.status === 401) {
+        
+        console.log(`🔄 Tentativa ${attempt + 1}: Erro de autenticação detectado, tentando renovar sessão...`);
+        
+        if (attempt < maxRetries) {
+          try {
+            // Tentar renovar a sessão
+            const { data: { session }, error: refreshError } = await supabase.auth.getSession();
+            
+            if (refreshError) {
+              console.error('❌ Erro ao renovar sessão:', refreshError);
+              // Se não conseguir renovar, fazer logout
+              await supabase.auth.signOut();
+              throw new Error('Sessão expirada. Por favor, faça login novamente.');
+            }
+            
+            if (session) {
+              console.log('✅ Sessão renovada, tentando novamente...');
+              // Aguardar um pouco antes da próxima tentativa
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              continue;
+            } else {
+              console.log('⚠️ Nenhuma sessão válida encontrada');
+              await supabase.auth.signOut();
+              throw new Error('Sessão expirada. Por favor, faça login novamente.');
+            }
+          } catch (refreshError) {
+            console.error('❌ Erro ao renovar sessão:', refreshError);
+            await supabase.auth.signOut();
+            throw new Error('Sessão expirada. Por favor, faça login novamente.');
+          }
+        }
+      }
+      
+      // Se não é erro de autenticação ou já tentou o máximo de vezes
+      throw error;
+    }
+  }
+  
+  throw lastError;
+};
+
 // ====================================
 // SERVIÇOS PARA DASHBOARD
 // ====================================
 
 export const dashboardService = {
   async getStats(): Promise<DashboardStats | null> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return null;
+    return withAuthRetry(async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return null;
 
-    const { data, error } = await supabase
-      .from('dashboard_stats')
-      .select('*')
-      .eq('user_id', user.user.id)
-      .single();
+      const { data, error } = await supabase
+        .from('dashboard_stats')
+        .select('*')
+        .eq('user_id', user.user.id)
+        .single();
 
-    if (error) {
-      console.error('Erro ao buscar estatísticas do dashboard:', error);
-      return null;
-    }
+      if (error) {
+        console.error('Erro ao buscar estatísticas do dashboard:', error);
+        return null;
+      }
 
-    return data;
+      return data;
+    });
   }
 };
 
@@ -31,94 +92,80 @@ export const dashboardService = {
 
 export const leadsService = {
   async getAll(): Promise<Lead[]> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return [];
+    return withAuthRetry(async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return [];
 
-    const { data, error } = await supabase
-      .from('leads')
-      .select(`
-        *,
-        empresa:empresas(*)
-      `)
-      .eq('user_id', user.user.id)
-      .order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('leads')
+        .select(`
+          *,
+          empresa:empresas(*)
+        `)
+        .eq('user_id', user.user.id)
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Erro ao buscar leads:', error);
-      return [];
-    }
+      if (error) {
+        console.error('Erro ao buscar leads:', error);
+        return [];
+      }
 
-    return data || [];
+      return data || [];
+    });
   },
 
   async create(lead: LeadForm): Promise<Lead | null> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return null;
+    return withAuthRetry(async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return null;
 
-    const { data, error } = await supabase
-      .from('leads')
-      .insert([{ ...lead, user_id: user.user.id }])
-      .select()
-      .single();
+      const { data, error } = await supabase
+        .from('leads')
+        .insert([{ ...lead, user_id: user.user.id }])
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Erro ao criar lead:', error);
-      return null;
-    }
+      if (error) {
+        console.error('Erro ao criar lead:', error);
+        return null;
+      }
 
-    return data;
+      return data;
+    });
   },
 
-  async update(id: string, lead: Partial<LeadForm>): Promise<Lead | null> {
-    const { data, error } = await supabase
-      .from('leads')
-      .update(lead)
-      .eq('id', id)
-      .select()
-      .single();
+  async update(id: string, lead: Partial<Lead>): Promise<Lead | null> {
+    return withAuthRetry(async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .update(lead)
+        .eq('id', id)
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Erro ao atualizar lead:', error);
-      return null;
-    }
+      if (error) {
+        console.error('Erro ao atualizar lead:', error);
+        return null;
+      }
 
-    return data;
+      return data;
+    });
   },
 
   async delete(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('leads')
-      .delete()
-      .eq('id', id);
+    return withAuthRetry(async () => {
+      const { error } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', id);
 
-    if (error) {
-      console.error('Erro ao deletar lead:', error);
-      return false;
-    }
+      if (error) {
+        console.error('Erro ao deletar lead:', error);
+        return false;
+      }
 
-    return true;
-  },
-
-  async getByStatus(status: string): Promise<Lead[]> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return [];
-
-    const { data, error } = await supabase
-      .from('leads')
-      .select(`
-        *,
-        empresa:empresas(*)
-      `)
-      .eq('user_id', user.user.id)
-      .eq('status', status)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Erro ao buscar leads por status:', error);
-      return [];
-    }
-
-    return data || [];
+      return true;
+    });
   }
 };
 
@@ -128,88 +175,77 @@ export const leadsService = {
 
 export const empresasService = {
   async getAll(): Promise<Empresa[]> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return [];
+    return withAuthRetry(async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return [];
 
-    const { data, error } = await supabase
-      .from('empresas')
-      .select('*')
-      .eq('user_id', user.user.id)
-      .order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('empresas')
+        .select('*')
+        .eq('user_id', user.user.id)
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Erro ao buscar empresas:', error);
-      return [];
-    }
+      if (error) {
+        console.error('Erro ao buscar empresas:', error);
+        return [];
+      }
 
-    return data || [];
+      return data || [];
+    });
   },
 
   async create(empresa: EmpresaForm): Promise<Empresa | null> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return null;
+    return withAuthRetry(async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return null;
 
-    const { data, error } = await supabase
-      .from('empresas')
-      .insert([{ ...empresa, user_id: user.user.id }])
-      .select()
-      .single();
+      const { data, error } = await supabase
+        .from('empresas')
+        .insert([{ ...empresa, user_id: user.user.id }])
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Erro ao criar empresa:', error);
-      return null;
-    }
+      if (error) {
+        console.error('Erro ao criar empresa:', error);
+        return null;
+      }
 
-    return data;
+      return data;
+    });
   },
 
-  async update(id: string, empresa: Partial<EmpresaForm>): Promise<Empresa | null> {
-    const { data, error } = await supabase
-      .from('empresas')
-      .update(empresa)
-      .eq('id', id)
-      .select()
-      .single();
+  async update(id: string, empresa: Partial<Empresa>): Promise<Empresa | null> {
+    return withAuthRetry(async () => {
+      const { data, error } = await supabase
+        .from('empresas')
+        .update(empresa)
+        .eq('id', id)
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Erro ao atualizar empresa:', error);
-      return null;
-    }
+      if (error) {
+        console.error('Erro ao atualizar empresa:', error);
+        return null;
+      }
 
-    return data;
+      return data;
+    });
   },
 
   async delete(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('empresas')
-      .delete()
-      .eq('id', id);
+    return withAuthRetry(async () => {
+      const { error } = await supabase
+        .from('empresas')
+        .delete()
+        .eq('id', id);
 
-    if (error) {
-      console.error('Erro ao deletar empresa:', error);
-      return false;
-    }
+      if (error) {
+        console.error('Erro ao deletar empresa:', error);
+        return false;
+      }
 
-    return true;
-  },
-
-  async getByStatus(status: string): Promise<Empresa[]> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return [];
-
-    const { data, error } = await supabase
-      .from('empresas')
-      .select('*')
-      .eq('user_id', user.user.id)
-      .eq('status', status)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Erro ao buscar empresas por status:', error);
-      return [];
-    }
-
-    return data || [];
+      return true;
+    });
   }
 };
 
@@ -219,88 +255,77 @@ export const empresasService = {
 
 export const campanhasService = {
   async getAll(): Promise<Campanha[]> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return [];
+    return withAuthRetry(async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return [];
 
-    const { data, error } = await supabase
-      .from('campanhas')
-      .select('*')
-      .eq('user_id', user.user.id)
-      .order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('campanhas')
+        .select('*')
+        .eq('user_id', user.user.id)
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Erro ao buscar campanhas:', error);
-      return [];
-    }
+      if (error) {
+        console.error('Erro ao buscar campanhas:', error);
+        return [];
+      }
 
-    return data || [];
+      return data || [];
+    });
   },
 
   async create(campanha: CampanhaForm): Promise<Campanha | null> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return null;
+    return withAuthRetry(async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return null;
 
-    const { data, error } = await supabase
-      .from('campanhas')
-      .insert([{ ...campanha, user_id: user.user.id }])
-      .select()
-      .single();
+      const { data, error } = await supabase
+        .from('campanhas')
+        .insert([{ ...campanha, user_id: user.user.id }])
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Erro ao criar campanha:', error);
-      return null;
-    }
+      if (error) {
+        console.error('Erro ao criar campanha:', error);
+        return null;
+      }
 
-    return data;
+      return data;
+    });
   },
 
-  async update(id: string, campanha: Partial<CampanhaForm>): Promise<Campanha | null> {
-    const { data, error } = await supabase
-      .from('campanhas')
-      .update(campanha)
-      .eq('id', id)
-      .select()
-      .single();
+  async update(id: string, campanha: Partial<Campanha>): Promise<Campanha | null> {
+    return withAuthRetry(async () => {
+      const { data, error } = await supabase
+        .from('campanhas')
+        .update(campanha)
+        .eq('id', id)
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Erro ao atualizar campanha:', error);
-      return null;
-    }
+      if (error) {
+        console.error('Erro ao atualizar campanha:', error);
+        return null;
+      }
 
-    return data;
+      return data;
+    });
   },
 
   async delete(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('campanhas')
-      .delete()
-      .eq('id', id);
+    return withAuthRetry(async () => {
+      const { error } = await supabase
+        .from('campanhas')
+        .delete()
+        .eq('id', id);
 
-    if (error) {
-      console.error('Erro ao deletar campanha:', error);
-      return false;
-    }
+      if (error) {
+        console.error('Erro ao deletar campanha:', error);
+        return false;
+      }
 
-    return true;
-  },
-
-  async getByStatus(status: string): Promise<Campanha[]> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return [];
-
-    const { data, error } = await supabase
-      .from('campanhas')
-      .select('*')
-      .eq('user_id', user.user.id)
-      .eq('status', status)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Erro ao buscar campanhas por status:', error);
-      return [];
-    }
-
-    return data || [];
+      return true;
+    });
   }
 };
 
@@ -310,69 +335,77 @@ export const campanhasService = {
 
 export const basesDadosService = {
   async getAll(): Promise<BaseDados[]> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return [];
+    return withAuthRetry(async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return [];
 
-    const { data, error } = await supabase
-      .from('bases_dados')
-      .select('*')
-      .eq('user_id', user.user.id)
-      .order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('bases_dados')
+        .select('*')
+        .eq('user_id', user.user.id)
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Erro ao buscar bases de dados:', error);
-      return [];
-    }
+      if (error) {
+        console.error('Erro ao buscar bases de dados:', error);
+        return [];
+      }
 
-    return data || [];
+      return data || [];
+    });
   },
 
   async create(base: Partial<BaseDados>): Promise<BaseDados | null> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return null;
+    return withAuthRetry(async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return null;
 
-    const { data, error } = await supabase
-      .from('bases_dados')
-      .insert([{ ...base, user_id: user.user.id }])
-      .select()
-      .single();
+      const { data, error } = await supabase
+        .from('bases_dados')
+        .insert([{ ...base, user_id: user.user.id }])
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Erro ao criar base de dados:', error);
-      return null;
-    }
+      if (error) {
+        console.error('Erro ao criar base de dados:', error);
+        return null;
+      }
 
-    return data;
+      return data;
+    });
   },
 
   async update(id: string, base: Partial<BaseDados>): Promise<BaseDados | null> {
-    const { data, error } = await supabase
-      .from('bases_dados')
-      .update(base)
-      .eq('id', id)
-      .select()
-      .single();
+    return withAuthRetry(async () => {
+      const { data, error } = await supabase
+        .from('bases_dados')
+        .update(base)
+        .eq('id', id)
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Erro ao atualizar base de dados:', error);
-      return null;
-    }
+      if (error) {
+        console.error('Erro ao atualizar base de dados:', error);
+        return null;
+      }
 
-    return data;
+      return data;
+    });
   },
 
   async delete(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('bases_dados')
-      .delete()
-      .eq('id', id);
+    return withAuthRetry(async () => {
+      const { error } = await supabase
+        .from('bases_dados')
+        .delete()
+        .eq('id', id);
 
-    if (error) {
-      console.error('Erro ao deletar base de dados:', error);
-      return false;
-    }
+      if (error) {
+        console.error('Erro ao deletar base de dados:', error);
+        return false;
+      }
 
-    return true;
+      return true;
+    });
   }
 };
 
@@ -430,20 +463,22 @@ export const authService = {
   },
 
   async getProfile() {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) return null;
+    return withAuthRetry(async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return null;
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.user.id)
-      .single();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.user.id)
+        .single();
 
-    if (error) {
-      console.error('Erro ao buscar perfil:', error);
-      return null;
-    }
+      if (error) {
+        console.error('Erro ao buscar perfil:', error);
+        return null;
+      }
 
-    return data;
+      return data;
+    });
   }
 }; 

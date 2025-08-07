@@ -8,9 +8,10 @@ import type { KanbanStatus } from '../../types/kanban';
 
 interface KanbanBoardProps {
   empresas: EmpresaBanco[];
+  onAbrirDetalhes?: (empresa: EmpresaBanco) => void;
 }
 
-export function KanbanBoard({ empresas }: KanbanBoardProps) {
+export function KanbanBoard({ empresas, onAbrirDetalhes }: KanbanBoardProps) {
   const { state, moveEmpresa, dispararMensagem } = useKanban(empresas);
   const [activeItem, setActiveItem] = useState<EmpresaBanco | null>(null);
   const [overColumn, setOverColumn] = useState<KanbanStatus | null>(null);
@@ -92,6 +93,7 @@ export function KanbanBoard({ empresas }: KanbanBoardProps) {
             <KanbanColumn
               column={column}
               onDisparar={dispararMensagem}
+              onAbrirDetalhes={onAbrirDetalhes}
               isOver={overColumn === column.id}
               minWidthClass="min-w-[280px] sm:min-w-[320px] max-w-[320px]"
             />

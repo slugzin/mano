@@ -204,36 +204,157 @@ export interface SalvarEmpresasResponse {
   success: boolean;
   message?: string;
   empresasSalvas?: number;
+  empresasExistentes?: number;
   error?: string;
+}
+
+// Interface para verificar WhatsApp
+export interface VerificarWhatsAppRequest {
+  numeros: string[];
+}
+
+export interface VerificarWhatsAppResponse {
+  success: boolean;
+  data?: {
+    numerosVerificados: Array<{
+      numero: string;
+      temWhatsapp: boolean;
+      status: string;
+    }>;
+    totalVerificados: number;
+    totalComWhatsapp: number;
+    totalSemWhatsapp: number;
+    percentualWhatsapp: number;
+  };
+  error?: string;
+}
+
+// Função para verificar WhatsApp
+export async function verificarWhatsApp(numeros: string[]): Promise<VerificarWhatsAppResponse> {
+  try {
+    console.log('Verificando WhatsApp para números:', numeros);
+    
+    const { data, error } = await supabase.functions.invoke('verificar-whatsapp', {
+      body: { numeros }
+    });
+
+    if (error) {
+      console.error('Erro na verificação de WhatsApp:', error);
+      return {
+        success: false,
+        error: error.message || 'Erro ao verificar WhatsApp'
+      };
+    }
+
+    console.log('Resposta da verificação de WhatsApp:', data);
+    
+    return {
+      success: true,
+      data: data
+    };
+    
+  } catch (error) {
+    console.error('Erro na requisição de verificação de WhatsApp:', error);
+    return {
+      success: false,
+      error: 'Erro de conexão. Tente novamente.'
+    };
+  }
+}
+
+// Função para formatar número de telefone para o formato da API
+function formatarNumeroParaAPI(phoneNumber: string): string {
+  // Remove todos os caracteres não numéricos
+  let numero = phoneNumber.replace(/\D/g, '');
+  
+  // Se não começar com 55 (Brasil), adiciona
+  if (!numero.startsWith('55')) {
+    numero = '55' + numero;
+  }
+  
+  return numero;
 }
 
 export async function salvarEmpresas(dados: SalvarEmpresasRequest): Promise<SalvarEmpresasResponse> {
   try {
     console.log('Salvando empresas no banco:', dados);
     
+    // Pegar o usuário atual
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) {
+      return {
+        success: false,
+        error: 'Usuário não autenticado'
+      };
+    }
+    
     // Converter empresas para o formato do banco
-    const empresasFormatadas = dados.empresas.map(empresa => ({
-      titulo: empresa.title,
-      endereco: empresa.address || null,
-      categoria: empresa.category || null,
-      telefone: empresa.phoneNumber || null,
-      website: empresa.website || null,
-      latitude: empresa.latitude || null,
-      longitude: empresa.longitude || null,
-      avaliacao: empresa.rating || null,
-      total_avaliacoes: empresa.ratingCount || 0,
-      posicao: empresa.position,
-      cid: empresa.cid || null,
-      links_agendamento: empresa.bookingLinks ? JSON.stringify(empresa.bookingLinks) : null,
-      parametros_busca: JSON.stringify(dados.parametrosBusca),
-      pesquisa: dados.parametrosBusca.tipoEmpresa,
-      status: 'a_contatar' // Definir status inicial como 'a_contatar'
-    }));
+    // Verificar empresas já existentes para este usuário
+    const cidsExistentes = dados.empresas
+      .filter(empresa => empresa.cid)
+      .map(empresa => empresa.cid);
+
+    let empresasExistentes: any[] = [];
+    if (cidsExistentes.length > 0) {
+      const { data: existentes } = await supabase
+        .from('empresas')
+        .select('cid')
+        .in('cid', cidsExistentes)
+        .eq('user_id', user.user.id);
+      
+      empresasExistentes = existentes || [];
+    }
+
+    const cidsJaExistentes = new Set(empresasExistentes.map(e => e.cid));
+
+    // Filtrar empresas que não existem para este usuário
+    const empresasNovas = dados.empresas.filter(empresa => 
+      !empresa.cid || !cidsJaExistentes.has(empresa.cid)
+    );
+
+    console.log(`Total de empresas: ${dados.empresas.length}`);
+    console.log(`Empresas já existentes: ${empresasExistentes.length}`);
+    console.log(`Empresas novas para inserir: ${empresasNovas.length}`);
+
+    if (empresasNovas.length === 0) {
+      return {
+        success: true,
+        message: 'Todas as empresas já existem no seu banco de dados!',
+        empresasSalvas: 0,
+        empresasExistentes: empresasExistentes.length
+      };
+    }
+
+    const empresasFormatadas = empresasNovas.map(empresa => {
+      return {
+        empresa_nome: empresa.title,
+        endereco: empresa.address || null,
+        categoria: empresa.category || null,
+        telefone: empresa.phoneNumber || null,
+        website: empresa.website || null,
+        latitude: empresa.latitude || null,
+        longitude: empresa.longitude || null,
+        avaliacao: empresa.rating || null,
+        total_avaliacoes: empresa.ratingCount || 0,
+        posicao: empresa.position,
+        cid: empresa.cid || null,
+        links_agendamento: empresa.bookingLinks ? JSON.stringify(empresa.bookingLinks) : null,
+        parametros_busca: JSON.stringify(dados.parametrosBusca),
+        pesquisa: dados.parametrosBusca.tipoEmpresa,
+        status: 'a_contatar', // Definir status inicial como 'a_contatar'
+        tem_whatsapp: (empresa as any).temWhatsapp || false, // Usar informação já verificada
+        user_id: user.user.id // Adicionar user_id
+      };
+    });
 
     // Inserir no banco usando Supabase client diretamente
+    // Usar ON CONFLICT para evitar duplicações de mesma empresa para mesmo usuário
     const { data, error } = await supabase
       .from('empresas')
-      .insert(empresasFormatadas)
+      .upsert(empresasFormatadas, {
+        onConflict: 'cid,user_id',
+        ignoreDuplicates: false
+      })
       .select();
 
     if (error) {
@@ -249,7 +370,8 @@ export async function salvarEmpresas(dados: SalvarEmpresasRequest): Promise<Salv
     return {
       success: true,
       message: `${data?.length || 0} empresas salvas com sucesso!`,
-      empresasSalvas: data?.length || 0
+      empresasSalvas: data?.length || 0,
+      empresasExistentes: empresasExistentes.length
     };
     
   } catch (error) {
@@ -264,7 +386,7 @@ export async function salvarEmpresas(dados: SalvarEmpresasRequest): Promise<Salv
 // Interface para empresa do banco
 export interface EmpresaBanco {
   id: number;
-  titulo: string;
+  empresa_nome: string;
   endereco?: string;
   categoria?: string;
   telefone?: string;
@@ -279,6 +401,7 @@ export interface EmpresaBanco {
   parametros_busca?: string;
   pesquisa?: string;
   status?: string;
+  tem_whatsapp?: boolean;
   capturado_em: string;
   atualizado_em: string;
 }
@@ -300,9 +423,19 @@ export async function buscarEmpresas(filtros?: {
   try {
     console.log('Buscando empresas do banco:', filtros);
     
+    // Pegar o usuário atual
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) {
+      return {
+        success: false,
+        error: 'Usuário não autenticado'
+      };
+    }
+    
     let query = supabase
       .from('empresas')
       .select('*')
+      .eq('user_id', user.user.id) // Filtrar apenas empresas do usuário atual
       .order('capturado_em', { ascending: false });
 
     // Aplicar filtros
@@ -311,7 +444,7 @@ export async function buscarEmpresas(filtros?: {
     }
 
     if (filtros?.busca) {
-      query = query.or(`titulo.ilike.%${filtros.busca}%,endereco.ilike.%${filtros.busca}%,categoria.ilike.%${filtros.busca}%`);
+      query = query.or(`empresa_nome.ilike.%${filtros.busca}%,endereco.ilike.%${filtros.busca}%,categoria.ilike.%${filtros.busca}%`);
     }
 
     if (filtros?.pesquisa) {
@@ -369,12 +502,12 @@ export interface EstatisticasFunil {
   proximasAcoes: {
     respostasAguardando: Array<{
       id: number;
-      titulo: string;
+      empresa_nome: string;
       horasAguardando: number;
     }>;
     followUpsSugeridos: Array<{
       id: number;
-      titulo: string;
+      empresa_nome: string;
       diasDesdeContato: number;
     }>;
     novosProspects: number;
@@ -479,14 +612,14 @@ export async function buscarEstatisticasFunil(modalidade?: string): Promise<Esta
         .slice(0, 3)
         .map(e => ({
           id: e.id,
-          titulo: e.titulo,
+          empresa_nome: e.empresa_nome,
           horasAguardando: Math.floor(Math.random() * 48) + 1
         })) || [],
       followUpsSugeridos: empresas?.filter(e => e.status === 'contato_realizado')
         .slice(3, 6)
         .map(e => ({
           id: e.id,
-          titulo: e.titulo,
+          empresa_nome: e.empresa_nome,
           diasDesdeContato: Math.floor(Math.random() * 7) + 3
         })) || [],
       novosProspects: funil.a_contatar
@@ -509,6 +642,59 @@ export async function buscarEstatisticasFunil(modalidade?: string): Promise<Esta
     
   } catch (error) {
     console.error('Erro ao buscar estatísticas do funil:', error);
+    return {
+      success: false,
+      error: 'Erro de conexão. Tente novamente.'
+    };
+  }
+}
+
+// Interface para atualização de webhook
+export interface AtualizarWebhookRequest {
+  instanceName: string;
+}
+
+export interface AtualizarWebhookResponse {
+  success: boolean;
+  message?: string;
+  instanceName?: string;
+  webhookAnterior?: any;
+  webhookAtualizado?: any;
+  verificacao?: any;
+  error?: string;
+  status?: number;
+  details?: string;
+}
+
+export async function atualizarWebhook(dados: AtualizarWebhookRequest): Promise<AtualizarWebhookResponse> {
+  try {
+    console.log('Atualizando webhook para instância:', dados.instanceName);
+    
+    const { data, error } = await supabase.functions.invoke('atualizar-webhook', {
+      body: dados
+    });
+
+    if (error) {
+      console.error('Erro ao atualizar webhook:', error);
+      return {
+        success: false,
+        error: error.message || 'Erro ao atualizar webhook'
+      };
+    }
+
+    console.log('Webhook atualizado com sucesso:', data);
+    
+    return {
+      success: true,
+      message: data.message || 'Webhook atualizado com sucesso',
+      instanceName: data.instanceName,
+      webhookAnterior: data.webhookAnterior,
+      webhookAtualizado: data.webhookAtualizado,
+      verificacao: data.verificacao
+    };
+    
+  } catch (error) {
+    console.error('Erro na requisição de atualizar webhook:', error);
     return {
       success: false,
       error: 'Erro de conexão. Tente novamente.'

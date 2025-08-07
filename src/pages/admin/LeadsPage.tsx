@@ -33,6 +33,13 @@ const LeadsPage: React.FC = () => {
   const [salvandoEmpresas, setSalvandoEmpresas] = useState(false);
   const [empresasSalvas, setEmpresasSalvas] = useState(false);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [estatisticasWhatsApp, setEstatisticasWhatsApp] = useState<{
+    totalComWhatsApp: number;
+    totalSemWhatsApp: number;
+  } | null>(null);
+  const [verificandoWhatsApp, setVerificandoWhatsApp] = useState(false);
+  const [empresasComWhatsApp, setEmpresasComWhatsApp] = useState<(Empresa & { temWhatsapp?: boolean })[]>([]);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   
   const [locations, setLocations] = useState<Location[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
@@ -124,6 +131,13 @@ const LeadsPage: React.FC = () => {
     console.log('=====================');
   }, [showLocationDropdown, locations, loadingLocations, formData.localizacao]);
 
+  // Verificar WhatsApp automaticamente quando o modal abrir
+  useEffect(() => {
+    if (showDispatchModal && empresas.length > 0 && !estatisticasWhatsApp) {
+      verificarWhatsAppEmpresas();
+    }
+  }, [showDispatchModal, empresas.length]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -161,13 +175,140 @@ const LeadsPage: React.FC = () => {
     }
   };
 
+  const verificarWhatsAppEmpresas = async () => {
+    setVerificandoWhatsApp(true);
+    setErrorMessage('');
+    
+    try {
+      // Extrair números de telefone das empresas (removendo duplicatas)
+      const numerosTelefone = [...new Set(
+        empresas
+          .filter(empresa => empresa.phoneNumber)
+          .map(empresa => {
+            // Formatar número para API
+            let numero = empresa.phoneNumber!.replace(/\D/g, '');
+            if (!numero.startsWith('55')) {
+              numero = '55' + numero;
+            }
+            return numero;
+          })
+          .filter(numero => numero.length >= 12) // Filtrar apenas números válidos (55 + DDD + número)
+      )];
+      
+      console.log('Números únicos para verificação:', numerosTelefone.length, numerosTelefone);
+      
+      if (numerosTelefone.length === 0) {
+        setEstatisticasWhatsApp({
+          totalComWhatsApp: 0,
+          totalSemWhatsApp: empresas.length
+        });
+        setEmpresasComWhatsApp([]);
+        return;
+      }
+      
+      // Verificar WhatsApp usando a edge function
+      const { data, error } = await supabase.functions.invoke('verificar-whatsapp', {
+        body: { numeros: numerosTelefone }
+      });
+      
+      if (error) {
+        console.error('Erro na verificação de WhatsApp:', error);
+        console.error('Detalhes do erro:', error.message, error.details);
+        
+        // Se o erro for de números duplicados, tentar novamente com números únicos
+        if (error.message?.includes('duplicate') || error.details?.message?.includes('duplicate')) {
+          console.log('Tentando novamente com números únicos...');
+          // A verificação já foi feita no frontend, então continuar
+        }
+        
+        setErrorMessage(`Erro ao verificar WhatsApp: ${error.message}. Continuando sem verificação...`);
+        setEstatisticasWhatsApp({
+          totalComWhatsApp: 0,
+          totalSemWhatsApp: empresas.length
+        });
+        setEmpresasComWhatsApp([]);
+        return;
+      }
+      
+      // Processar resultado - a API retorna um array direto
+      const numerosVerificados = Array.isArray(data) ? data : [];
+      const mapaVerificacao = new Map<string, boolean>();
+      
+      console.log('Processando resposta da API:', numerosVerificados);
+      
+      numerosVerificados.forEach((item: { exists: boolean; number: string; jid: string }) => {
+        mapaVerificacao.set(item.number, item.exists);
+        console.log(`Número ${item.number}: ${item.exists ? 'Tem WhatsApp' : 'Não tem WhatsApp'}`);
+      });
+      
+      // Marcar empresas com WhatsApp
+      const empresasVerificadas = empresas.map(empresa => {
+        if (!empresa.phoneNumber) return { ...empresa, temWhatsapp: false };
+        
+        let numeroFormatado = empresa.phoneNumber.replace(/\D/g, '');
+        if (!numeroFormatado.startsWith('55')) {
+          numeroFormatado = '55' + numeroFormatado;
+        }
+        
+        const temWhatsapp = mapaVerificacao.get(numeroFormatado) || false;
+        console.log(`Empresa ${empresa.title} (${numeroFormatado}): ${temWhatsapp ? 'Tem WhatsApp' : 'Não tem WhatsApp'}`);
+        return { ...empresa, temWhatsapp };
+      });
+      
+      const comWhatsApp = empresasVerificadas.filter(e => e.temWhatsapp);
+      const semWhatsApp = empresasVerificadas.filter(e => !e.temWhatsapp);
+      
+      console.log('Estatísticas finais:', {
+        total: empresasVerificadas.length,
+        comWhatsApp: comWhatsApp.length,
+        semWhatsApp: semWhatsApp.length,
+        empresasComWhatsApp: comWhatsApp.map(e => e.title)
+      });
+      
+      setEmpresasComWhatsApp(comWhatsApp);
+      setEstatisticasWhatsApp({
+        totalComWhatsApp: comWhatsApp.length,
+        totalSemWhatsApp: semWhatsApp.length
+      });
+      
+      console.log('Verificação de WhatsApp concluída:', {
+        total: empresas.length,
+        comWhatsApp: comWhatsApp.length,
+        semWhatsApp: semWhatsApp.length
+      });
+      
+    } catch (error) {
+      console.error('Erro na verificação de WhatsApp:', error);
+      setErrorMessage('Erro ao verificar WhatsApp. Continuando sem verificação...');
+      setEstatisticasWhatsApp({
+        totalComWhatsApp: 0,
+        totalSemWhatsApp: empresas.length
+      });
+      setEmpresasComWhatsApp([]);
+    } finally {
+      setVerificandoWhatsApp(false);
+    }
+  };
+
   const handleSalvarEmpresas = async () => {
     setSalvandoEmpresas(true);
     setErrorMessage('');
     
     try {
+      // Usar as empresas já verificadas
+      const empresasParaSalvar = empresas.map(empresa => {
+        const empresaComWhatsApp = empresasComWhatsApp.find(e => 
+          (e.cid && e.cid === empresa.cid) || 
+          (e.title === empresa.title && e.address === empresa.address)
+        );
+        return {
+          ...empresa,
+          temWhatsapp: empresaComWhatsApp?.temWhatsapp || false
+        };
+      });
+      
       const result = await salvarEmpresas({
-        empresas,
+        empresas: empresasParaSalvar,
         parametrosBusca: {
           tipoEmpresa: formData.tipoEmpresa,
           localizacao: formData.localizacao || '',
@@ -180,7 +321,9 @@ const LeadsPage: React.FC = () => {
       if (result.success) {
         setEmpresasSalvas(true);
         console.log('Empresas salvas:', result.empresasSalvas);
-        alert(`✅ ${result.message}`);
+        
+        // Mostrar modal de sucesso
+        setShowSuccessModal(true);
       } else {
         setErrorMessage(result.error || 'Erro ao salvar empresas');
         alert(`❌ ${result.error}`);
@@ -518,22 +661,54 @@ const LeadsPage: React.FC = () => {
                       <Target size={20} className="sm:w-6 sm:h-6 text-green-500" />
                     </div>
                     <h4 className="text-sm sm:text-base font-semibold text-foreground mb-1 sm:mb-2">
-                      Empresas Captadas com Sucesso!
+                      {verificandoWhatsApp 
+                        ? 'Verificando WhatsApp...'
+                        : estatisticasWhatsApp
+                        ? 'Verificação Concluída!'
+                        : 'Empresas Encontradas!'
+                      }
                     </h4>
                     <p className="text-xs sm:text-sm text-muted-foreground">
-                      Suas empresas serão salvas para você disparar mensagens e visualizar os resultados posteriormente.
+                      {verificandoWhatsApp 
+                        ? 'Verificando WhatsApp das empresas...'
+                        : estatisticasWhatsApp
+                        ? `Encontradas ${estatisticasWhatsApp.totalComWhatsApp} empresas com WhatsApp ativo. Clique em "Salvar Empresas" para continuar.`
+                        : 'Verificando WhatsApp das empresas...'
+                      }
                     </p>
                   </div>
 
                   {/* Resumo */}
                   <div className="bg-gradient-to-r from-green-500/5 to-emerald-500/5 rounded-lg p-2 sm:p-3 border border-green-500/20">
-                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-3 gap-3 sm:gap-4">
                       <div className="text-center">
                         <div className="text-base sm:text-lg font-bold text-green-600">{empresas.length}</div>
-                        <div className="text-xs text-muted-foreground">Empresas</div>
+                        <div className="text-xs text-muted-foreground">Total</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-base sm:text-lg font-bold text-green-600">{formData.tipoEmpresa || 'Geral'}</div>
+                        <div className="text-base sm:text-lg font-bold text-green-600">
+                          {verificandoWhatsApp ? (
+                            <div className="w-4 h-4 border-2 border-green-500/20 border-t-green-500 rounded-full animate-spin mx-auto" />
+                          ) : estatisticasWhatsApp ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <span>📱</span>
+                              <span>{estatisticasWhatsApp.totalComWhatsApp}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1">
+                              <span>📱</span>
+                              <span>{empresas.filter(e => e.phoneNumber).length}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {verificandoWhatsApp ? 'Verificando...' : estatisticasWhatsApp ? 'Com WhatsApp' : 'Com WhatsApp'}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-base sm:text-lg font-bold text-emerald-600">
+                          {formData.tipoEmpresa || 'Geral'}
+                        </div>
                         <div className="text-xs text-muted-foreground">Tipo</div>
                       </div>
                     </div>
@@ -547,19 +722,19 @@ const LeadsPage: React.FC = () => {
                         <div className="w-5 h-5 bg-green-500/10 rounded-full flex items-center justify-center flex-shrink-0">
                           <span className="text-xs text-green-600 font-medium">1</span>
                         </div>
-                        <span>Captar e organizar suas empresas</span>
+                        <span>Salvar empresas e verificar WhatsApp</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-5 h-5 bg-green-500/10 rounded-full flex items-center justify-center flex-shrink-0">
                           <span className="text-xs text-green-600 font-medium">2</span>
                         </div>
-                        <span>Configurar mensagem e conexão WhatsApp</span>
+                        <span>Configurar mensagem e conexão</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-5 h-5 bg-green-500/10 rounded-full flex items-center justify-center flex-shrink-0">
                           <span className="text-xs text-green-600 font-medium">3</span>
                         </div>
-                        <span>Iniciar disparo e acompanhar resultados</span>
+                        <span>Disparar apenas para empresas com WhatsApp</span>
                       </div>
                     </div>
                   </div>
@@ -578,46 +753,102 @@ const LeadsPage: React.FC = () => {
                       onClick={async () => {
                         // Captar empresas
                         setSalvandoEmpresas(true);
-                        try {
-                          const result = await salvarEmpresas({
-                            empresas,
-                            parametrosBusca: {
-                              tipoEmpresa: formData.tipoEmpresa,
-                              localizacao: formData.localizacao || '',
-                              pais: formData.pais,
-                              idioma: formData.idioma,
-                              quantidadeSolicitada: formData.quantidadeEmpresas
-                            }
-                          });
-                          
-                          if (result.success) {
-                            setEmpresasSalvas(true);
-                            setShowDispatchModal(false);
-                            // Redirecionar para disparos
-                            navigate('/admin/disparos');
-                          } else {
-                            alert(`❌ ${result.error}`);
-                          }
-                        } catch (error) {
-                          alert('❌ Erro ao captar empresas');
-                        } finally {
-                          setSalvandoEmpresas(false);
-                        }
+                        handleSalvarEmpresas();
                       }}
-                      disabled={salvandoEmpresas}
+                      disabled={salvandoEmpresas || verificandoWhatsApp || !estatisticasWhatsApp}
                       className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm font-medium shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {salvandoEmpresas ? (
                         <>
                           <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                          Captando...
+                          Salvando...
                         </>
                       ) : (
                         <>
                           <Target size={16} />
-                          Captar e Disparar
+                          {estatisticasWhatsApp ? 'Salvar Empresas' : 'Verificando...'}
                         </>
                       )}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal de Sucesso */}
+        <AnimatePresence>
+          {showSuccessModal && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-background border border-border rounded-xl w-full max-w-md overflow-hidden"
+              >
+                {/* Header */}
+                <div className="p-4 border-b border-border bg-green-500/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center">
+                      <CheckCircle size={20} className="text-green-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">
+                        Empresas Salvas!
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        Empresas salvas com sucesso
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-4 space-y-4">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <CheckCircle size={32} className="text-green-500" />
+                    </div>
+                    <h4 className="text-base font-semibold text-foreground mb-2">
+                      Salvamento Concluído!
+                    </h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Suas empresas foram salvas com sucesso no banco de dados.
+                    </p>
+                  </div>
+
+                  {/* Estatísticas */}
+                  {estatisticasWhatsApp && (
+                    <div className="bg-muted/20 rounded-lg p-3 border border-border">
+                      <h5 className="text-sm font-medium text-foreground mb-2">📊 Estatísticas:</h5>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="text-center">
+                          <div className="text-lg font-bold text-green-600">
+                            <span>📱</span> {estatisticasWhatsApp.totalComWhatsApp}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Com WhatsApp</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-lg font-bold text-gray-600">
+                            {estatisticasWhatsApp.totalSemWhatsApp}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Sem WhatsApp</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => {
+                        setShowSuccessModal(false);
+                        navigate('/admin/disparos');
+                      }}
+                      className="px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2 text-sm font-medium shadow-sm"
+                    >
+                      <span>🚀</span>
+                      Ir para Disparos
                     </button>
                   </div>
                 </div>

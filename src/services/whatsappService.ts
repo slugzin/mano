@@ -62,6 +62,15 @@ export const whatsappService = {
       const hash = data.hash;
       const settings = data.settings;
 
+      // Pegar o usuário atual
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        return {
+          success: false,
+          error: 'Usuário não autenticado'
+        };
+      }
+
       // Salvar no banco de dados - Note que agora iniciamos com status 'disconnected'
       const { error: dbError } = await supabase
         .from('whatsapp_instances')
@@ -75,7 +84,8 @@ export const whatsappService = {
           webhook_config: data.webhook || {},
           websocket_config: data.websocket || {},
           rabbitmq_config: data.rabbitmq || {},
-          sqs_config: data.sqs || {}
+          sqs_config: data.sqs || {},
+          user_id: user.user.id // Adicionar user_id
         });
 
       if (dbError) {
@@ -149,9 +159,16 @@ export const whatsappService = {
     try {
       console.log('🔍 Buscando instâncias...');
 
+      // Pegar o usuário atual
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        return { success: false, error: 'Usuário não autenticado' };
+      }
+
       const { data, error } = await supabase
         .from('whatsapp_instances')
         .select('*')
+        .eq('user_id', user.user.id) // Filtrar apenas instâncias do usuário atual
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -278,10 +295,17 @@ export const whatsappService = {
       const data = await response.json();
       console.log('📱 Status das instâncias recebido:', data);
 
+      // Pegar o usuário atual
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        return { success: false, error: 'Usuário não autenticado' };
+      }
+
       // Buscar instâncias existentes no banco
       const { data: existingInstances, error: fetchError } = await supabase
         .from('whatsapp_instances')
-        .select('instance_id');
+        .select('instance_id')
+        .eq('user_id', user.user.id); // Filtrar apenas instâncias do usuário atual
 
       if (fetchError) {
         console.error('Erro ao buscar instâncias existentes:', fetchError);
@@ -322,7 +346,8 @@ export const whatsappService = {
               profile_name: instance.profileName,
               owner_jid: instance.ownerJid,
               last_sync: now,
-              integration: instance.integration || 'WHATSAPP-BAILEYS'
+              integration: instance.integration || 'WHATSAPP-BAILEYS',
+              user_id: user.user.id // Adicionar user_id
             });
 
           if (error) {

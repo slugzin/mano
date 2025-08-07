@@ -18,7 +18,10 @@ import {
   Search,
   ChevronDown,
   Star,
-  Target
+  Target,
+  Calendar,
+  Rocket,
+  Trash2
 } from '../../utils/icons';
 import { supabase } from '../../lib/supabase';
 import { type EmpresaBanco } from '../../services/edgeFunctions';
@@ -70,6 +73,23 @@ const statusLabels = {
   'perdidos': 'Perdidos'
 };
 
+const getStatusDescription = (status: string): string => {
+  switch (status) {
+    case 'a_contatar':
+      return 'Empresa ainda não foi contatada';
+    case 'contato_realizado':
+      return 'Primeiro contato já foi feito';
+    case 'em_negociacao':
+      return 'Em processo de negociação';
+    case 'ganhos':
+      return 'Negócio fechado com sucesso';
+    case 'perdidos':
+      return 'Negócio não foi fechado';
+    default:
+      return '';
+  }
+};
+
 // Filtros avançados interface
 interface FiltrosAvancados {
   status: string[];
@@ -106,6 +126,9 @@ const EmpresasPage: React.FC = () => {
   const [empresasFiltradas, setEmpresasFiltradas] = useState<EmpresaBanco[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [empresaSelecionada, setEmpresaSelecionada] = useState<EmpresaBanco | null>(null);
+  const [empresaDetalhes, setEmpresaDetalhes] = useState<EmpresaBanco | null>(null);
+  const [empresaParaExcluir, setEmpresaParaExcluir] = useState<EmpresaBanco | null>(null);
+  const [isExcluindo, setIsExcluindo] = useState(false);
   
   // Filtros básicos
   const [filtros, setFiltros] = useState({
@@ -114,6 +137,7 @@ const EmpresasPage: React.FC = () => {
 
   // Filtros avançados
   const [showFiltrosAvancados, setShowFiltrosAvancados] = useState(false);
+  const [avaliacaoPersonalizada, setAvaliacaoPersonalizada] = useState<string>('');
   const [filtrosAvancados, setFiltrosAvancados] = useState<FiltrosAvancados>({
     status: [],
     apenasComWebsite: false,
@@ -131,7 +155,7 @@ const EmpresasPage: React.FC = () => {
 
   // Calcular estatísticas das empresas filtradas
   const totalComWebsite = empresasFiltradas.filter(e => e.website).length;
-  const totalComWhatsApp = empresasFiltradas.filter(e => isWhatsApp(e.telefone)).length;
+  const totalComWhatsApp = empresasFiltradas.filter(e => e.tem_whatsapp).length;
   const cidades = [...new Set(
     empresasFiltradas
       .map(e => extractCityFromAddress(e.endereco))
@@ -188,7 +212,7 @@ const EmpresasPage: React.FC = () => {
     if (filtros.busca) {
       const termo = filtros.busca.toLowerCase();
       resultado = resultado.filter(e => 
-        e.titulo?.toLowerCase().includes(termo) ||
+        e.empresa_nome?.toLowerCase().includes(termo) ||
         e.endereco?.toLowerCase().includes(termo) ||
         (e.categoria && e.categoria.toLowerCase().includes(termo))
       );
@@ -204,7 +228,7 @@ const EmpresasPage: React.FC = () => {
     }
 
     if (filtrosAvancados.apenasComWhatsApp) {
-      resultado = resultado.filter(e => isWhatsApp(e.telefone));
+      resultado = resultado.filter(e => e.tem_whatsapp);
     }
 
     if (filtrosAvancados.apenasComTelefone) {
@@ -216,7 +240,15 @@ const EmpresasPage: React.FC = () => {
     }
 
     if (filtrosAvancados.avaliacaoMinima > 0) {
-      resultado = resultado.filter(e => e.avaliacao && e.avaliacao <= filtrosAvancados.avaliacaoMinima);
+      resultado = resultado.filter(e => e.avaliacao && e.avaliacao >= filtrosAvancados.avaliacaoMinima);
+    }
+
+    // Filtro de avaliação personalizada
+    if (avaliacaoPersonalizada) {
+      const valor = parseFloat(avaliacaoPersonalizada);
+      if (!isNaN(valor)) {
+        resultado = resultado.filter(e => e.avaliacao && e.avaliacao >= valor);
+      }
     }
 
     if (filtrosAvancados.cidadesSelecionadas.length > 0) {
@@ -251,6 +283,33 @@ const EmpresasPage: React.FC = () => {
       setEmpresaSelecionada(null);
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
+    }
+  };
+
+  const excluirEmpresa = async (empresaId: number) => {
+    if (!empresaParaExcluir) return;
+    
+    setIsExcluindo(true);
+    try {
+      const { error } = await supabase
+        .from('empresas')
+        .delete()
+        .eq('id', empresaId);
+
+      if (error) {
+        console.error('Erro ao excluir empresa:', error);
+        alert('Erro ao excluir empresa. Tente novamente.');
+        return;
+      }
+
+      // Fechar modal e recarregar empresas
+      setEmpresaParaExcluir(null);
+      await loadEmpresas();
+    } catch (error) {
+      console.error('Erro ao excluir empresa:', error);
+      alert('Erro ao excluir empresa. Tente novamente.');
+    } finally {
+      setIsExcluindo(false);
     }
   };
 
@@ -293,6 +352,7 @@ const EmpresasPage: React.FC = () => {
       categoriasSelecionadas: []
     });
     setFiltros({ busca: '' });
+    setAvaliacaoPersonalizada('');
   };
 
   const temFiltrosAtivos = () => {
@@ -302,6 +362,7 @@ const EmpresasPage: React.FC = () => {
            filtrosAvancados.apenasComTelefone ||
            filtrosAvancados.apenasComEndereco ||
            filtrosAvancados.avaliacaoMinima > 0 ||
+           avaliacaoPersonalizada.length > 0 ||
            filtrosAvancados.cidadesSelecionadas.length > 0 ||
            filtrosAvancados.categoriasSelecionadas.length > 0 ||
            filtros.busca.length > 0;
@@ -328,9 +389,16 @@ const EmpresasPage: React.FC = () => {
           <div className="p-3 border-b border-border bg-gradient-to-br from-background to-muted/20">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total de Empresas</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                  {temFiltrosAtivos() ? 'Resultados Filtrados' : 'Total de Empresas'}
+                </p>
                 <p className="text-2xl font-bold text-foreground bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
                   {empresasFiltradas.length}
+                  {temFiltrosAtivos() && empresasFiltradas.length !== empresas.length && (
+                    <span className="text-sm text-muted-foreground ml-1">
+                      / {empresas.length}
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center">
@@ -338,71 +406,183 @@ const EmpresasPage: React.FC = () => {
               </div>
             </div>
             
-            {/* Filtros Rápidos */}
-            <div className="mb-3">
-              <p className="text-xs text-muted-foreground font-medium mb-2">Filtrar por Status</p>
-              <div className="grid grid-cols-3 gap-1">
-                <button
-                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: [] }))}
-                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
-                    filtrosAvancados.status.length === 0
-                      ? 'bg-accent text-accent-foreground shadow-sm'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Todas ({empresasFiltradas.length})
-                </button>
-                <button
-                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['a_contatar'] }))}
-                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
-                    filtrosAvancados.status.includes('a_contatar')
-                      ? 'bg-emerald-500 text-white shadow-sm'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  A Contatar ({empresasFiltradas.filter(e => e.status === 'a_contatar').length})
-                </button>
-                <button
-                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['contato_realizado'] }))}
-                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
-                    filtrosAvancados.status.includes('contato_realizado')
-                      ? 'bg-blue-500 text-white shadow-sm'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Realizados ({empresasFiltradas.filter(e => e.status === 'contato_realizado').length})
-                </button>
-                <button
-                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['em_negociacao'] }))}
-                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
-                    filtrosAvancados.status.includes('em_negociacao')
-                      ? 'bg-purple-500 text-white shadow-sm'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Negociação ({empresasFiltradas.filter(e => e.status === 'em_negociacao').length})
-                </button>
-                <button
-                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['ganhos'] }))}
-                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
-                    filtrosAvancados.status.includes('ganhos')
-                      ? 'bg-green-500 text-white shadow-sm'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Ganhos ({empresasFiltradas.filter(e => e.status === 'ganhos').length})
-                </button>
-                <button
-                  onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['perdidos'] }))}
-                  className={`px-1 py-1 rounded-full text-xs font-medium transition-all ${
-                    filtrosAvancados.status.includes('perdidos')
-                      ? 'bg-red-500 text-white shadow-sm'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Perdidos ({empresasFiltradas.filter(e => e.status === 'perdidos').length})
-                </button>
-              </div>
+            {/* Filtros Colapsáveis */}
+            <div className="mb-4">
+              <button
+                onClick={() => setShowFiltrosAvancados(!showFiltrosAvancados)}
+                className="w-full flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Filter size={16} className="text-muted-foreground" />
+                  <span className="text-sm font-medium">Filtros</span>
+                  {temFiltrosAtivos() && (
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-accent rounded-full"></div>
+                      <span className="text-xs text-accent font-medium">Ativos</span>
+                    </div>
+                  )}
+                </div>
+                <ChevronDown 
+                  size={16} 
+                  className={`text-muted-foreground transition-transform ${showFiltrosAvancados ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {showFiltrosAvancados && (
+                <div className="mt-3 space-y-4 p-4 bg-muted/20 rounded-lg">
+                  {/* Filtros de Status */}
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium mb-2">Status</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: [] }))}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          filtrosAvancados.status.length === 0
+                            ? 'bg-accent text-accent-foreground shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Todas ({empresas.length})
+                      </button>
+                      <button
+                        onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['a_contatar'] }))}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          filtrosAvancados.status.includes('a_contatar')
+                            ? 'bg-emerald-500 text-white shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        A Contatar ({empresas.filter(e => e.status === 'a_contatar').length})
+                      </button>
+                      <button
+                        onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['contato_realizado'] }))}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          filtrosAvancados.status.includes('contato_realizado')
+                            ? 'bg-blue-500 text-white shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Realizados ({empresas.filter(e => e.status === 'contato_realizado').length})
+                      </button>
+                      <button
+                        onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['em_negociacao'] }))}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          filtrosAvancados.status.includes('em_negociacao')
+                            ? 'bg-purple-500 text-white shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Negociação ({empresas.filter(e => e.status === 'em_negociacao').length})
+                      </button>
+                      <button
+                        onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['ganhos'] }))}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          filtrosAvancados.status.includes('ganhos')
+                            ? 'bg-green-500 text-white shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Ganhos ({empresas.filter(e => e.status === 'ganhos').length})
+                      </button>
+                      <button
+                        onClick={() => setFiltrosAvancados(prev => ({ ...prev, status: ['perdidos'] }))}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          filtrosAvancados.status.includes('perdidos')
+                            ? 'bg-red-500 text-white shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Perdidos ({empresas.filter(e => e.status === 'perdidos').length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Filtros Adicionais */}
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium mb-2">Filtros Adicionais</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setFiltrosAvancados(prev => ({ 
+                          ...prev, 
+                          apenasComWhatsApp: !prev.apenasComWhatsApp 
+                        }))}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          filtrosAvancados.apenasComWhatsApp
+                            ? 'bg-green-500 text-white shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <span className="mr-1">📱</span> WhatsApp ({empresas.filter(e => e.tem_whatsapp).length})
+                      </button>
+                      <button
+                        onClick={() => setFiltrosAvancados(prev => ({ 
+                          ...prev, 
+                          apenasComWebsite: !prev.apenasComWebsite 
+                        }))}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          filtrosAvancados.apenasComWebsite
+                            ? 'bg-blue-500 text-white shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <span className="mr-1">🌐</span> Site ({empresas.filter(e => e.website).length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Avaliação Mínima */}
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium mb-2">Avaliação Mínima</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => setAvaliacaoPersonalizada(avaliacaoPersonalizada === '4.8' ? '' : '4.8')}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          avaliacaoPersonalizada === '4.8'
+                            ? 'bg-yellow-500 text-white shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <span className="mr-1">⭐</span> 4.8+ ({empresas.filter(e => e.avaliacao && e.avaliacao >= 4.8).length})
+                      </button>
+                      <button
+                        onClick={() => setAvaliacaoPersonalizada(avaliacaoPersonalizada === '4.5' ? '' : '4.5')}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          avaliacaoPersonalizada === '4.5'
+                            ? 'bg-yellow-500 text-white shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <span className="mr-1">⭐</span> 4.5+ ({empresas.filter(e => e.avaliacao && e.avaliacao >= 4.5).length})
+                      </button>
+                      <button
+                        onClick={() => setAvaliacaoPersonalizada(avaliacaoPersonalizada === '4.0' ? '' : '4.0')}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          avaliacaoPersonalizada === '4.0'
+                            ? 'bg-yellow-500 text-white shadow-sm'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <span className="mr-1">⭐</span> 4.0+ ({empresas.filter(e => e.avaliacao && e.avaliacao >= 4.0).length})
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Mostra empresas com avaliação igual ou superior
+                    </p>
+                  </div>
+
+                  {/* Botão Limpar Todos */}
+                  {temFiltrosAtivos() && (
+                    <div className="pt-2 border-t border-border">
+                      <button
+                        onClick={limparFiltros}
+                        className="w-full px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Limpar todos os filtros
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Cards de Status Estilizados */}
@@ -447,7 +627,12 @@ const EmpresasPage: React.FC = () => {
             {empresasFiltradas.length === 0 ? (
               <div className="text-center py-12">
                 <Building className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma empresa encontrada</h3>
+                <h3 className="text-lg font-medium text-foreground mb-2">
+                  {filtrosAvancados.status.length > 0 
+                    ? `Nenhuma empresa no status "${statusLabels[filtrosAvancados.status[0] as keyof typeof statusLabels]}"`
+                    : 'Nenhuma empresa encontrada'
+                  }
+                </h3>
                 <p className="text-muted-foreground mb-6">
                   {temFiltrosAtivos() 
                     ? 'Tente ajustar os filtros para encontrar mais empresas.'
@@ -468,7 +653,7 @@ const EmpresasPage: React.FC = () => {
               empresasFiltradas.map((empresa) => (
                 <button
                   key={empresa.id}
-                  onClick={() => setEmpresaSelecionada(empresa)}
+                  onClick={() => setEmpresaDetalhes(empresa)}
                   className="w-full bg-card hover:bg-accent/5 border border-border rounded-lg md:rounded-xl p-3 md:p-4 text-left transition-all duration-200 group"
                 >
                   <div className="flex items-start gap-3 md:gap-4">
@@ -480,7 +665,7 @@ const EmpresasPage: React.FC = () => {
                     </div>
                     <div className="min-w-0 flex-1">
                       <h3 className="text-sm font-medium text-foreground line-clamp-2 leading-tight">
-                        {empresa.titulo}
+                        {empresa.empresa_nome}
                       </h3>
                       <p className={`text-xs ${statusColors[empresa.status as keyof typeof statusColors].text} mt-1`}>
                         {statusLabels[empresa.status as keyof typeof statusLabels]}
@@ -494,9 +679,9 @@ const EmpresasPage: React.FC = () => {
                             <span className="text-xs text-muted-foreground">{empresa.avaliacao}</span>
                           </div>
                         )}
-                        {isWhatsApp(empresa.telefone) && (
+                        {empresa.tem_whatsapp && (
                           <div className="flex items-center gap-1 text-green-600">
-                            <MessageCircle size={11} />
+                            <span className="text-xs">📱</span>
                             <span className="text-xs">WhatsApp</span>
                           </div>
                         )}
@@ -522,23 +707,181 @@ const EmpresasPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Modal de Detalhes da Empresa (Mobile) */}
+        {empresaDetalhes && (
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex md:hidden items-center justify-center p-4"
+            onClick={() => setEmpresaDetalhes(null)}
+          >
+            <div 
+              className="bg-background border border-border rounded-2xl w-full max-w-md animate-in fade-in duration-200"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between p-5 border-b border-border">
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground">
+                    Detalhes da Empresa
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setEmpresaDetalhes(null)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="p-5 space-y-4">
+                {/* Nome da empresa */}
+                <div>
+                  <h4 className="text-lg font-semibold text-foreground leading-tight">
+                    {empresaDetalhes.empresa_nome}
+                  </h4>
+                  {empresaDetalhes.categoria && (
+                    <div className="inline-flex items-center px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium mt-2">
+                      {empresaDetalhes.categoria}
+                    </div>
+                  )}
+                </div>
+
+                {/* Rating */}
+                {empresaDetalhes.avaliacao && (
+                  <div className="flex items-center gap-2">
+                    <Star size={16} className="text-yellow-400 fill-yellow-400" />
+                    <span className="text-base font-medium text-foreground">
+                      {empresaDetalhes.avaliacao}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      ({empresaDetalhes.total_avaliacoes} avaliações)
+                    </span>
+                  </div>
+                )}
+
+                {/* Endereço */}
+                {empresaDetalhes.endereco && (
+                  <div className="flex items-start gap-3">
+                    <MapPin size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {empresaDetalhes.endereco}
+                    </p>
+                  </div>
+                )}
+
+                {/* Telefone */}
+                <div className="flex items-center justify-between p-3 bg-muted/20 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <Phone size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-foreground font-medium">
+                      {empresaDetalhes.telefone || 'Não disponível'}
+                    </span>
+                  </div>
+                  {empresaDetalhes.telefone ? (
+                    <button
+                      onClick={() => window.open(`tel:${empresaDetalhes.telefone}`, '_self')}
+                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Ligar
+                    </button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      Não disponível
+                    </span>
+                  )}
+                </div>
+
+                {/* Website */}
+                <div className="flex items-center justify-between p-3 bg-muted/20 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <Globe size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-foreground font-medium">
+                      Website
+                    </span>
+                  </div>
+                  {empresaDetalhes.website ? (
+                    <button
+                      onClick={() => window.open(empresaDetalhes.website, '_blank')}
+                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Visitar
+                    </button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      Não disponível
+                    </span>
+                  )}
+                </div>
+
+                {/* Status atual e botão para alterar */}
+                <div className="pt-4 border-t border-border">
+                  <div className="p-3 bg-primary/5 rounded-xl border border-primary/10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 ${statusColors[empresaDetalhes.status as keyof typeof statusColors].bg} ${statusColors[empresaDetalhes.status as keyof typeof statusColors].border} border rounded-lg flex items-center justify-center`}>
+                          {React.createElement(statusColors[empresaDetalhes.status as keyof typeof statusColors].icon, {
+                            size: 16,
+                            className: statusColors[empresaDetalhes.status as keyof typeof statusColors].text
+                          })}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            Status atual
+                          </p>
+                          <p className={`text-sm ${statusColors[empresaDetalhes.status as keyof typeof statusColors].text} font-medium`}>
+                            {statusLabels[empresaDetalhes.status as keyof typeof statusLabels]}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setEmpresaDetalhes(null);
+                        setEmpresaSelecionada(empresaDetalhes);
+                      }}
+                      className="w-full px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Alterar Status
+                    </button>
+                  </div>
+                </div>
+
+                {/* Botão Excluir Empresa */}
+                <div className="pt-4 border-t border-border">
+                  <button
+                    onClick={() => {
+                      setEmpresaDetalhes(null);
+                      setEmpresaParaExcluir(empresaDetalhes);
+                    }}
+                    className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={16} />
+                    Excluir Empresa
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Modal de Status (Mobile) */}
         {empresaSelecionada && (
           <div 
-            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 md:hidden flex items-center justify-center p-2"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex md:hidden items-center justify-center p-4"
             onClick={() => setEmpresaSelecionada(null)}
           >
             <div 
-              className="bg-background border border-border p-3 space-y-4 rounded-xl w-full max-w-md animate-in fade-in duration-200"
+              className="bg-background border border-border rounded-2xl w-full max-w-sm animate-in fade-in duration-200"
               onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-start justify-between mb-4">
+              {/* Header */}
+              <div className="flex items-start justify-between p-4 border-b border-border">
                 <div>
-                  <h3 className="text-sm font-medium text-foreground">
-                    {empresaSelecionada.titulo}
+                  <h3 className="text-base font-medium text-foreground">
+                    Alterar Status
                   </h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Selecione o novo status
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {empresaSelecionada.empresa_nome}
                   </p>
                 </div>
                 <button
@@ -549,7 +892,8 @@ const EmpresasPage: React.FC = () => {
                 </button>
               </div>
 
-              <div className="space-y-2">
+              {/* Opções de Status */}
+              <div className="p-4 space-y-2">
                 {Object.entries(statusColors).map(([status, config]) => (
                   <button
                     key={status}
@@ -558,7 +902,7 @@ const EmpresasPage: React.FC = () => {
                       setEmpresaSelecionada(null);
                     }}
                     className={`
-                      w-full flex items-center gap-3 p-3 rounded-lg transition-colors border
+                      w-full flex items-center gap-3 p-3 rounded-lg transition-all duration-200 border
                       ${empresaSelecionada.status === status 
                         ? `${config.bg} ${config.border} ${config.text}` 
                         : 'hover:bg-accent/5 border-border'
@@ -571,6 +915,9 @@ const EmpresasPage: React.FC = () => {
                     <div className="flex-1 text-left">
                       <p className={`text-sm font-medium ${empresaSelecionada.status === status ? config.text : 'text-foreground'}`}> 
                         {statusLabels[status as keyof typeof statusLabels]}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {getStatusDescription(status)}
                       </p>
                     </div>
                     {empresaSelecionada.status === status && (
@@ -654,12 +1001,224 @@ const EmpresasPage: React.FC = () => {
           <div className="bg-card border border-border rounded-xl p-3 md:p-4">
             <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-accent/30 scrollbar-track-transparent">
               <div className="min-w-[900px]">
-                <KanbanBoard empresas={empresasFiltradas} />
+                <KanbanBoard 
+                  empresas={empresasFiltradas} 
+                  onAbrirDetalhes={setEmpresaDetalhes}
+                />
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Modal de Detalhes da Empresa (Desktop) */}
+      {empresaDetalhes && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 hidden md:flex">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200 dark:border-gray-700 transform transition-all duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Detalhes da Empresa</h2>
+              <button
+                onClick={() => setEmpresaDetalhes(null)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Nome da Empresa */}
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">{empresaDetalhes.empresa_nome}</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm rounded-full font-medium">
+                    {empresaDetalhes.categoria || 'Sem categoria'}
+                  </span>
+                  {empresaDetalhes.tem_whatsapp && (
+                    <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-sm rounded-full font-medium flex items-center gap-1">
+                      📱 WhatsApp Ativo
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Informações Principais */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Avaliação */}
+                {empresaDetalhes.avaliacao && (
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Star size={16} className="text-yellow-500" />
+                      <span className="text-gray-900 dark:text-white font-semibold">{empresaDetalhes.avaliacao}</span>
+                    </div>
+                    {empresaDetalhes.total_avaliacoes > 0 && (
+                      <span className="text-gray-500 dark:text-gray-400 text-sm">
+                        {empresaDetalhes.total_avaliacoes} {empresaDetalhes.total_avaliacoes === 1 ? 'avaliação' : 'avaliações'}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Endereço */}
+                {empresaDetalhes.endereco && (
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <MapPin size={16} className="text-gray-500 dark:text-gray-400 mt-0.5 flex-shrink-0" />
+                      <span className="text-gray-600 dark:text-gray-400 text-sm">{empresaDetalhes.endereco}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Contatos */}
+              <div className="space-y-3">
+                {/* Telefone */}
+                {empresaDetalhes.telefone && (
+                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <Phone size={16} className="text-green-500" />
+                      <span className="text-gray-900 dark:text-white font-medium">{empresaDetalhes.telefone}</span>
+                    </div>
+                    <a
+                      href={`tel:${empresaDetalhes.telefone}`}
+                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm rounded-lg transition-colors font-medium"
+                    >
+                      Ligar
+                    </a>
+                  </div>
+                )}
+
+                {/* Website */}
+                {empresaDetalhes.website && (
+                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <Globe size={16} className="text-blue-500" />
+                      <span className="text-gray-900 dark:text-white font-medium">Website</span>
+                    </div>
+                    <a
+                      href={empresaDetalhes.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-colors font-medium"
+                    >
+                      Visitar
+                    </a>
+                  </div>
+                )}
+
+                {/* Links de Agendamento */}
+                {empresaDetalhes.links_agendamento && (
+                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar size={16} className="text-purple-500" />
+                      <span className="text-gray-900 dark:text-white font-medium">Agendamento</span>
+                    </div>
+                    <a
+                      href={empresaDetalhes.links_agendamento}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors font-medium"
+                    >
+                      Agendar
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="pt-6 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                {/* Botão Ir para Disparos (apenas se tem WhatsApp) */}
+                {empresaDetalhes.tem_whatsapp && (
+                  <button
+                    onClick={() => {
+                      setEmpresaDetalhes(null);
+                      // Redirecionar para disparos
+                      navigate('/admin/disparos');
+                    }}
+                    className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-base font-semibold transition-all duration-200 flex items-center justify-center gap-3 transform hover:scale-[1.02]"
+                  >
+                    <Rocket size={16} />
+                    Ir para Disparos
+                  </button>
+                )}
+                
+                {/* Botão Excluir Empresa */}
+                <button
+                  onClick={() => {
+                    setEmpresaDetalhes(null);
+                    setEmpresaParaExcluir(empresaDetalhes);
+                  }}
+                  className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg text-base font-semibold transition-all duration-200 flex items-center justify-center gap-3 transform hover:scale-[1.02]"
+                >
+                  <Trash2 size={16} />
+                  Excluir Empresa
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão */}
+      {empresaParaExcluir && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full shadow-2xl border border-gray-200 dark:border-gray-700 transform transition-all duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                  <Trash2 size={20} className="text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Excluir Empresa
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Esta ação não pode ser desfeita
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                Tem certeza que deseja excluir a empresa <strong className="text-gray-900 dark:text-white">{empresaParaExcluir.empresa_nome}</strong>? 
+                Esta ação irá remover permanentemente todos os dados da empresa.
+              </p>
+
+              {/* Botões */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEmpresaParaExcluir(null)}
+                  disabled={isExcluindo}
+                  className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => excluirEmpresa(empresaParaExcluir.id)}
+                  disabled={isExcluindo}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isExcluindo ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Excluindo...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={16} />
+                      Excluir
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,29 +1,37 @@
 import React from 'react';
-import { useAuth } from '../../hooks/useAuth';
-import Login from './Login';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import LoadingScreen from '../ui/LoadingScreen';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  requireAdmin?: boolean;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated, isLoading, login } = useAuth();
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
+  children, 
+  requireAdmin = false 
+}) => {
+  const { user, profile, loading } = useAuth();
+  const location = useLocation();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-500 via-purple-600 to-blue-600 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <div className="flex items-center justify-center">
-            <div className="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mr-3" />
-            <span className="text-gray-700 font-medium">Verificando acesso...</span>
-          </div>
-        </div>
-      </div>
-    );
+  if (loading) {
+    return <LoadingScreen page="default" />;
   }
 
-  if (!isAuthenticated) {
-    return <Login onLogin={login} />;
+  // Se não está logado, redirecionar para login
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Se precisa ser admin e não é admin
+  if (requireAdmin && profile?.role !== 'admin') {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  // Se o usuário não está ativo
+  if (profile && !profile.is_active) {
+    return <Navigate to="/account-disabled" replace />;
   }
 
   return <>{children}</>;

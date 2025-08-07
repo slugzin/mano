@@ -22,6 +22,7 @@ import {
   Clock
 } from '../../utils/icons';
 import { templateService, MessageTemplate } from '../../services/templateService';
+import { substituirVariaveis } from '../../utils/variables';
 import { supabase } from '../../lib/supabase';
 import { useFiltros } from '../../contexts/FiltrosContext';
 import PageHeader from '../../components/ui/PageHeader';
@@ -40,6 +41,30 @@ interface WhatsAppConnection {
   instance_name: string;
   instance_id: string;
   status: string;
+}
+
+interface Fluxo {
+  id: string;
+  nome: string;
+  descricao?: string;
+  criado_em: string;
+  ativo: boolean;
+}
+
+interface FraseWhatsApp {
+  id: string;
+  fase: string;
+  tipo: string;
+  texto: string;
+  criada_em: string;
+  delay_seconds: number;
+  delay_min_seconds: number;
+  delay_max_seconds: number;
+  formato: string;
+  conteudo: string;
+  ordem: number;
+  ativo: boolean;
+  fluxo_id: string;
 }
 
 interface FiltrosAvancados {
@@ -73,6 +98,7 @@ const DisparosPage: React.FC = () => {
   const [kanbanSegments, setKanbanSegments] = useState<KanbanSegment[]>([]);
   const [selectedSegment, setSelectedSegment] = useState<KanbanSegment | null>(null);
   const [empresasSegmento, setEmpresasSegmento] = useState<any[]>([]);
+  const [empresaDetalhes, setEmpresaDetalhes] = useState<any>(null);
   const [selecionadas, setSelecionadas] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -101,9 +127,12 @@ const DisparosPage: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1); // 1: Conexão, 2: Mensagem
   const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [fluxos, setFluxos] = useState<Fluxo[]>([]);
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
+  const [selectedFluxo, setSelectedFluxo] = useState<string | null>(null);
   const [customMessage, setCustomMessage] = useState('');
+  const [messageType, setMessageType] = useState<'template' | 'fluxo' | 'custom'>('custom');
   const [delay, setDelay] = useState(30);
   const [isLaunching, setIsLaunching] = useState(false);
   const [empresaVindaDoKanban, setEmpresaVindaDoKanban] = useState<any>(null);
@@ -229,13 +258,24 @@ const DisparosPage: React.FC = () => {
     }
   }, [modalidadeSelecionada, filtrosAtivos, filtrosAvancados]);
 
+  // Atualizar mensagem quando template for selecionado
+  useEffect(() => {
+    if (messageType === 'template' && selectedTemplate) {
+      const template = templates.find(t => t.id === selectedTemplate);
+      if (template) {
+        setCustomMessage(template.content);
+      }
+    }
+  }, [selectedTemplate, templates, messageType]);
+
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      // Carregar modalidades ordenadas por data mais recente
+      // Carregar modalidades ordenadas por data mais recente (apenas empresas com WhatsApp)
       const { data: empresasData } = await supabase
         .from('empresas')
         .select('pesquisa, capturado_em')
+        .eq('tem_whatsapp', true) // Filtrar apenas empresas com WhatsApp
         .not('pesquisa', 'is', null)
         .order('capturado_em', { ascending: false });
 
@@ -257,10 +297,11 @@ const DisparosPage: React.FC = () => {
         setModalidades(modalidadesOrdenadas);
       }
 
-      // Carregar cidades e categorias para filtros
+      // Carregar cidades e categorias para filtros (apenas empresas com WhatsApp)
       const { data: allEmpresas } = await supabase
         .from('empresas')
-        .select('endereco, categoria');
+        .select('endereco, categoria')
+        .eq('tem_whatsapp', true); // Filtrar apenas empresas com WhatsApp
 
       if (allEmpresas) {
         // Extrair cidades únicas
@@ -285,20 +326,35 @@ const DisparosPage: React.FC = () => {
         setCategoriasDisponiveis(categorias);
       }
 
-      // Carregar conexões WhatsApp
-      const { data: connectionsData } = await supabase
-        .from('whatsapp_instances')
-        .select('*')
-        .eq('status', 'connected');
+      // Carregar conexões WhatsApp do usuário atual
+      const { data: user } = await supabase.auth.getUser();
+      if (user.user) {
+        const { data: connectionsData } = await supabase
+          .from('whatsapp_instances')
+          .select('*')
+          .eq('status', 'connected')
+          .eq('user_id', user.user.id); // Filtrar apenas conexões do usuário atual
 
-      if (connectionsData) {
-        setConnections(connectionsData);
+        if (connectionsData) {
+          setConnections(connectionsData);
+        }
       }
 
       // Carregar templates
       const templatesResult = await templateService.listTemplates();
       if (templatesResult.success && templatesResult.data) {
         setTemplates(templatesResult.data);
+      }
+
+      // Carregar fluxos
+      const { data: fluxosData } = await supabase
+        .from('fluxos')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome');
+
+      if (fluxosData) {
+        setFluxos(fluxosData);
       }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -346,6 +402,7 @@ const DisparosPage: React.FC = () => {
       let query = supabase
         .from('empresas')
         .select('*')
+        .eq('tem_whatsapp', true) // Filtrar apenas empresas com WhatsApp
         .order('capturado_em', { ascending: false });
 
       if (modalidadeSelecionada && modalidadeSelecionada !== 'todas') {
@@ -402,6 +459,7 @@ const DisparosPage: React.FC = () => {
         .from('empresas')
         .select('*')
         .eq('status', selectedSegment!.status)
+        .eq('tem_whatsapp', true) // Filtrar apenas empresas com WhatsApp
         .order('capturado_em', { ascending: false });
 
       if (modalidadeSelecionada && modalidadeSelecionada !== 'todas') {
@@ -476,8 +534,10 @@ const DisparosPage: React.FC = () => {
   const resetWizard = () => {
     setCurrentStep(1);
     setSelectedConnection(null);
-    setCustomMessage('');
     setSelectedTemplate(null);
+    setSelectedFluxo(null);
+    setCustomMessage('');
+    setMessageType('custom');
     setDelay(30);
   };
 
@@ -486,11 +546,23 @@ const DisparosPage: React.FC = () => {
   };
 
   const canFinishWizard = () => {
-    return customMessage.trim().length > 0;
+    if (messageType === 'custom') {
+      return customMessage.trim().length > 0;
+    } else if (messageType === 'template') {
+      return selectedTemplate !== null;
+    } else if (messageType === 'fluxo') {
+      return selectedFluxo !== null;
+    }
+    return false;
   };
 
   const handleLaunch = async () => {
-    if (!selectedConnection || !customMessage.trim()) return;
+    if (!selectedConnection) return;
+    
+    // Validar se há mensagem ou fluxo selecionado
+    if (messageType === 'custom' && !customMessage.trim()) return;
+    if (messageType === 'template' && !selectedTemplate) return;
+    if (messageType === 'fluxo' && !selectedFluxo) return;
     
     setIsLaunching(true);
     
@@ -502,21 +574,82 @@ const DisparosPage: React.FC = () => {
       // Gerar nome da campanha automaticamente
       const nomeCampanha = await generateCampaignName(modalidadeSelecionada || 'Geral');
       
-      const { data, error } = await supabase.rpc('agendar_disparos', {
-        p_empresa_ids: selecionadas,
-        p_mensagem: customMessage,
-        p_conexao_id: selectedConnection,
-        p_tipo_midia: 'nenhum',
-        p_midia_url: null,
-        p_delay_segundos: delay,
-        p_nome_campanha: nomeCampanha
-      });
+      if (messageType === 'fluxo') {
+        // Buscar frases do fluxo selecionado
+        const { data: frasesData, error: frasesError } = await supabase
+          .from('frases_whatsapp')
+          .select('*')
+          .eq('fluxo_id', selectedFluxo)
+          .eq('ativo', true)
+          .order('ordem');
 
-      if (error) throw error;
+        if (frasesError) throw frasesError;
+        if (!frasesData || frasesData.length === 0) {
+          throw new Error('Nenhuma frase encontrada no fluxo selecionado');
+        }
 
-      if (data.success) {
+        // Buscar dados das empresas para substituir variáveis
+        const { data: empresasData, error: empresasError } = await supabase
+          .from('empresas')
+          .select('id, empresa_nome, telefone, website, endereco, categoria, avaliacao, total_avaliacoes, latitude, longitude, posicao, cid, pesquisa, status, capturado_em')
+          .in('id', selecionadas);
+
+        if (empresasError) throw empresasError;
+        if (!empresasData) {
+          throw new Error('Erro ao buscar dados das empresas');
+        }
+
+        // Criar disparos para cada empresa com todas as frases do fluxo
+        let totalTasks = 0;
+        for (const empresa of empresasData) {
+          for (const frase of frasesData) {
+            // Substituir variáveis na mensagem
+            const mensagemPersonalizada = substituirVariaveis(frase.texto, empresa);
+            
+            // Calcular delay baseado na frase ou usar delay padrão
+            const delayFrase = frase.delay_seconds > 0 ? frase.delay_seconds : delay;
+            
+            // Formatar telefone para WhatsApp
+            let telefoneFormatado = empresa.telefone;
+            if (telefoneFormatado) {
+              // Remover espaços, parênteses e traços
+              telefoneFormatado = telefoneFormatado.replace(/[\(\)\s\-]/g, '');
+              // Remover caracteres não numéricos exceto +
+              telefoneFormatado = telefoneFormatado.replace(/[^0-9\+]/g, '');
+              // Adicionar código do país se não existir
+              if (!telefoneFormatado.startsWith('55')) {
+                telefoneFormatado = '55' + telefoneFormatado;
+              }
+              // Adicionar sufixo do WhatsApp
+              telefoneFormatado = telefoneFormatado + '@s.whatsapp.net';
+            }
+
+            // Inserir disparo agendado
+            const { error: insertError } = await supabase
+              .from('disparos_agendados')
+              .insert({
+                empresa_id: empresa.id,
+                empresa_nome: empresa.empresa_nome || `Empresa ${empresa.id}`,
+                empresa_telefone: telefoneFormatado,
+                empresa_website: empresa.website,
+                empresa_endereco: empresa.endereco,
+                mensagem: mensagemPersonalizada,
+                tipo_midia: 'nenhum',
+                midia_url: null,
+                status: 'pendente',
+                agendado_para: new Date().toISOString(),
+                conexao_id: selectedConnection,
+                ordem: frase.ordem,
+                fase: frase.fase
+              });
+
+            if (insertError) throw insertError;
+            totalTasks++;
+          }
+        }
+
         // Calcular tempo estimado
-        const tempoTotalMinutos = Math.ceil((data.tasks_criadas * delay) / 60);
+        const tempoTotalMinutos = Math.ceil((totalTasks * delay) / 60);
         const horas = Math.floor(tempoTotalMinutos / 60);
         const minutos = tempoTotalMinutos % 60;
         
@@ -530,33 +663,99 @@ const DisparosPage: React.FC = () => {
         // Aguardar animação por 3 segundos
         await new Promise(resolve => setTimeout(resolve, 3000));
         
+        // Criar campanha para fluxos
+        const { data: campanhaData, error: campanhaError } = await supabase.rpc('agendar_disparos', {
+          p_empresa_ids: selecionadas,
+          p_mensagem: `Fluxo: ${frasesData.length} mensagens`,
+          p_conexao_id: selectedConnection,
+          p_tipo_midia: 'nenhum',
+          p_midia_url: null,
+          p_delay_segundos: delay,
+          p_nome_campanha: nomeCampanha,
+          p_ordem: 1,
+          p_fase: 'fase_1',
+          p_tipo_campanha: 'fluxo'
+        });
+
+        if (campanhaError) throw campanhaError;
+
         // Configurar dados da campanha
         setDispatchStats({
-          campanhaId: data.campanha_id,
+          campanhaId: campanhaData?.campanha_id,
           totalEmpresas: selecionadas.length,
-          tasksAgendadas: data.tasks_criadas,
+          tasksAgendadas: totalTasks,
           delaySegundos: delay,
           tempoEstimado: tempoEstimado
         });
 
-        // Mostrar tela de sucesso
-        setShowDispatchAnimation(false);
-        setShowSuccessScreen(true);
-
-        // Limpar estados
-          setSelectedSegment(null);
-          setSelectedConnection(null);
-          setCustomMessage('');
-        setSelecionadas([]);
-
       } else {
-        throw new Error('Erro ao agendar disparos');
+        // Disparo com mensagem única (template ou custom)
+        const mensagemFinal = messageType === 'template' && selectedTemplate 
+          ? templates.find(t => t.id === selectedTemplate)?.content || customMessage
+          : customMessage;
+
+        const { data, error } = await supabase.rpc('agendar_disparos', {
+          p_empresa_ids: selecionadas,
+          p_mensagem: mensagemFinal,
+          p_conexao_id: selectedConnection,
+          p_tipo_midia: 'nenhum',
+          p_midia_url: null,
+          p_delay_segundos: delay,
+          p_nome_campanha: nomeCampanha,
+          p_ordem: 1,
+          p_fase: 'fase_1',
+          p_tipo_campanha: messageType
+        });
+
+        if (error) throw error;
+
+        if (data.success) {
+          // Calcular tempo estimado
+          const tempoTotalMinutos = Math.ceil((data.tasks_criadas * delay) / 60);
+          const horas = Math.floor(tempoTotalMinutos / 60);
+          const minutos = tempoTotalMinutos % 60;
+          
+          let tempoEstimado = '';
+          if (horas > 0) {
+            tempoEstimado = `${horas}h ${minutos}min`;
+          } else {
+            tempoEstimado = `${minutos} minutos`;
+          }
+
+          // Aguardar animação por 3 segundos
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Configurar dados da campanha
+          setDispatchStats({
+            campanhaId: data.campanha_id,
+            totalEmpresas: selecionadas.length,
+            tasksAgendadas: data.tasks_criadas,
+            delaySegundos: delay,
+            tempoEstimado: tempoEstimado
+          });
+        } else {
+          throw new Error('Erro ao agendar disparos');
+        }
       }
+
+      // Mostrar tela de sucesso
+      setShowDispatchAnimation(false);
+      setShowSuccessScreen(true);
+
+      // Limpar estados
+      setSelectedSegment(null);
+      setSelectedConnection(null);
+      setSelectedTemplate(null);
+      setSelectedFluxo(null);
+      setCustomMessage('');
+      setMessageType('custom');
+      setSelecionadas([]);
+
     } catch (error: any) {
       setShowDispatchAnimation(false);
       alert('Erro: ' + error.message);
     }
-      setIsLaunching(false);
+    setIsLaunching(false);
   };
 
   const temFiltrosAtivos = () => {
@@ -603,6 +802,27 @@ const DisparosPage: React.FC = () => {
           />
         </div>
 
+        {/* Aviso sobre WhatsApp */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 sm:p-4 mb-4"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-lg">📱</span>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-green-600">
+                Apenas empresas com WhatsApp
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Esta página mostra apenas empresas que possuem WhatsApp ativo
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Banner de empresa vinda do Kanban */}
         {empresaVindaDoKanban && (
           <motion.div
@@ -616,7 +836,7 @@ const DisparosPage: React.FC = () => {
               </div>
               <div className="flex-1">
                 <h3 className="text-sm font-medium text-foreground">
-                  Disparo direcionado para: {empresaVindaDoKanban.titulo}
+                  Disparo direcionado para: {empresaVindaDoKanban.empresa_nome}
                 </h3>
                 <p className="text-xs text-muted-foreground">
                   Esta empresa foi selecionada automaticamente do kanban
@@ -936,6 +1156,9 @@ const DisparosPage: React.FC = () => {
                         <h2 className="text-lg font-semibold text-foreground">
                           Empresas - {selectedSegment.title} ({empresasSegmento.length})
                         </h2>
+                        <p className="text-xs text-muted-foreground">
+                          Mostrando apenas empresas com WhatsApp ativo para disparo
+                        </p>
                         
                         <div className="flex items-center gap-2">
                           <button
@@ -987,11 +1210,11 @@ const DisparosPage: React.FC = () => {
                     {empresasSegmento.length === 0 ? (
                       <div className="text-center py-12">
                         <Building className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                        <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma empresa encontrada</h3>
+                        <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma empresa com WhatsApp encontrada</h3>
                         <p className="text-muted-foreground">
                           {temFiltrosAtivos() 
                             ? 'Tente ajustar os filtros para encontrar mais empresas.'
-                            : 'Não há empresas neste segmento.'
+                            : 'Não há empresas com WhatsApp ativo neste segmento. Verifique se as empresas foram verificadas.'
                           }
                         </p>
                       </div>
@@ -1010,7 +1233,7 @@ const DisparosPage: React.FC = () => {
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1 min-w-0">
                                 <h3 className="text-sm font-medium text-foreground truncate">
-                                  {empresa.titulo}
+                                  {empresa.empresa_nome}
                                 </h3>
                                 {empresa.categoria && (
                                   <p className="text-xs text-muted-foreground">{empresa.categoria}</p>
@@ -1218,54 +1441,170 @@ const DisparosPage: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* Template Selector - Compacto */}
+                    {/* Tipo de Mensagem */}
                     <div>
                       <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
-                        Template (opcional)
+                        Tipo de Mensagem
                       </label>
-                      <div className="relative">
-                        <select
-                          value={selectedTemplate || ''}
-                          onChange={(e) => {
-                            const templateId = e.target.value;
-                            if (templateId === 'blank') {
-                              setSelectedTemplate(null);
-                              setCustomMessage('');
-                            } else if (templateId) {
-                              const template = templates.find(t => t.id === Number(templateId));
-                              if (template) {
-                                setSelectedTemplate(template.id);
-                                setCustomMessage(template.content);
-                              }
-                            } else {
-                              setSelectedTemplate(null);
-                            }
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMessageType('custom');
+                            setSelectedTemplate(null);
+                            setSelectedFluxo(null);
                           }}
-                          className="w-full appearance-none bg-background border border-border rounded-lg px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-foreground hover:border-accent/60 focus:border-accent focus:outline-none transition-all duration-200 pr-8 sm:pr-10 cursor-pointer"
+                          className={`px-3 py-2 text-xs rounded-lg border transition-all ${
+                            messageType === 'custom'
+                              ? 'bg-accent text-accent-foreground border-accent'
+                              : 'bg-background text-foreground border-border hover:border-accent/60'
+                          }`}
                         >
-                          <option value="">Selecionar template...</option>
-                          <option value="blank">Mensagem em branco</option>
-                          {templates.map((template) => (
-                            <option key={template.id} value={template.id}>
-                              {template.name}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown size={14} className="sm:w-4 sm:h-4 absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                          Mensagem
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMessageType('template');
+                            setSelectedFluxo(null);
+                          }}
+                          className={`px-3 py-2 text-xs rounded-lg border transition-all ${
+                            messageType === 'template'
+                              ? 'bg-accent text-accent-foreground border-accent'
+                              : 'bg-background text-foreground border-border hover:border-accent/60'
+                          }`}
+                        >
+                          Template
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMessageType('fluxo');
+                            setSelectedTemplate(null);
+                          }}
+                          className={`px-3 py-2 text-xs rounded-lg border transition-all ${
+                            messageType === 'fluxo'
+                              ? 'bg-accent text-accent-foreground border-accent'
+                              : 'bg-background text-foreground border-border hover:border-accent/60'
+                          }`}
+                        >
+                          Fluxo
+                        </button>
                       </div>
                     </div>
+
+                    {/* Template Selector */}
+                    {messageType === 'template' && (
+                      <div>
+                        <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
+                          Selecionar Template
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={selectedTemplate || ''}
+                            onChange={(e) => {
+                              const templateId = e.target.value;
+                              if (templateId) {
+                                const template = templates.find(t => t.id === Number(templateId));
+                                if (template) {
+                                  setSelectedTemplate(template.id);
+                                  setCustomMessage(template.content);
+                                }
+                              } else {
+                                setSelectedTemplate(null);
+                                setCustomMessage('');
+                              }
+                            }}
+                            className="w-full appearance-none bg-background border border-border rounded-lg px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-foreground hover:border-accent/60 focus:border-accent focus:outline-none transition-all duration-200 pr-8 sm:pr-10 cursor-pointer"
+                          >
+                            <option value="">Selecionar template...</option>
+                            {templates.map((template) => (
+                              <option key={template.id} value={template.id}>
+                                {template.name}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown size={14} className="sm:w-4 sm:h-4 absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        </div>
+                        
+                        {/* Botão para ir para página de templates */}
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowDisparoConfig(false);
+                              navigate('/admin/fluxos');
+                            }}
+                            className="text-xs text-accent hover:text-accent/80 transition-colors flex items-center gap-1"
+                          >
+                            <span>📝</span>
+                            <span>Gerenciar Templates</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Fluxo Selector */}
+                    {messageType === 'fluxo' && (
+                      <div>
+                        <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
+                          Selecionar Fluxo
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={selectedFluxo || ''}
+                            onChange={(e) => {
+                              setSelectedFluxo(e.target.value || null);
+                            }}
+                            className="w-full appearance-none bg-background border border-border rounded-lg px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-foreground hover:border-accent/60 focus:border-accent focus:outline-none transition-all duration-200 pr-8 sm:pr-10 cursor-pointer"
+                          >
+                            <option value="">Selecionar fluxo...</option>
+                            {fluxos.map((fluxo) => (
+                              <option key={fluxo.id} value={fluxo.id}>
+                                {fluxo.nome}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown size={14} className="sm:w-4 sm:h-4 absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        </div>
+                        
+                        {/* Botão para ir para página de fluxos */}
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowDisparoConfig(false);
+                              navigate('/admin/fluxos');
+                            }}
+                            className="text-xs text-accent hover:text-accent/80 transition-colors flex items-center gap-1"
+                          >
+                            <span>⚡</span>
+                            <span>Gerenciar Fluxos</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Message Input - Compacto */}
                     <div>
                       <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
-                        Mensagem <span className="text-red-500">*</span>
+                        {messageType === 'custom' ? 'Mensagem' : 'Conteúdo'} <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
                         <textarea
                           value={customMessage}
                           onChange={(e) => setCustomMessage(e.target.value)}
-                          placeholder="Digite sua mensagem..."
-                          className="w-full px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 resize-none transition-all duration-200"
+                          placeholder={
+                            messageType === 'custom' 
+                              ? "Digite sua mensagem..." 
+                              : messageType === 'template' 
+                                ? "Selecione um template acima..." 
+                                : "Selecione um fluxo acima..."
+                          }
+                          disabled={messageType !== 'custom'}
+                          className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 resize-none transition-all duration-200 ${
+                            messageType !== 'custom' ? 'opacity-60 cursor-not-allowed' : ''
+                          }`}
                           rows={3}
                           style={{ minHeight: '80px' }}
                         />
@@ -1275,13 +1614,13 @@ const DisparosPage: React.FC = () => {
                           <span className="text-xs text-muted-foreground">
                             {customMessage.length} chars
                           </span>
-                          {!customMessage.trim() && (
+                          {messageType === 'custom' && !customMessage.trim() && (
                             <span className="text-xs text-red-500 font-medium">Obrigatório</span>
                           )}
                         </div>
                         
                         {/* Botão Salvar Template - Intuitivo */}
-                        {customMessage.trim() && (
+                        {messageType === 'custom' && customMessage.trim() && (
                           <button
                             onClick={async () => {
                               const templateName = prompt('Nome do template:');

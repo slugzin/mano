@@ -43,6 +43,7 @@ interface CampanhaDisparo {
   total_avaliacoes_soma: number;
   categorias_encontradas: string[];
   cidades_encontradas: string[];
+  tipo_campanha: string;
   criado_em: string;
   atualizado_em: string;
 }
@@ -92,6 +93,8 @@ const DisparosHistoricoPage: React.FC = () => {
   const [metricasReais, setMetricasReais] = useState<Record<string, { total: number; enviados: number; processando: number; pendentes: number; erros: number }>>({});
   const [loading, setLoading] = useState(true);
   const [loadingEmpresas, setLoadingEmpresas] = useState<string | null>(null);
+  const [fluxoMensagens, setFluxoMensagens] = useState<Record<string, any[]>>({});
+  const [fluxoNomes, setFluxoNomes] = useState<Record<string, string>>({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -126,6 +129,65 @@ const DisparosHistoricoPage: React.FC = () => {
     setLoading(false);
   };
 
+  const fetchFluxoMensagens = async (campanhaId: string) => {
+    if (fluxoMensagens[campanhaId]) return; // Já carregadas
+
+    try {
+      const campanha = campanhas.find(c => c.id === campanhaId);
+      if (!campanha || campanha.tipo_campanha !== 'fluxo') return;
+
+      // Buscar disparos desta campanha para extrair as mensagens únicas
+      const { data, error } = await supabase
+        .from('disparos_agendados')
+        .select('mensagem, ordem, fase, fluxo_id')
+        .eq('conexao_id', campanha.conexao_id)
+        .order('ordem', { ascending: true });
+
+      if (error) throw error;
+
+      // Buscar nome do fluxo se houver fluxo_id
+      let nomeFluxo = 'Fluxo Personalizado';
+      if (data && data.length > 0 && data[0].fluxo_id) {
+        const { data: fluxoData } = await supabase
+          .from('fluxos')
+          .select('nome')
+          .eq('id', data[0].fluxo_id)
+          .single();
+        
+        if (fluxoData) {
+          nomeFluxo = fluxoData.nome;
+        }
+      }
+
+      setFluxoNomes(prev => ({
+        ...prev,
+        [campanhaId]: nomeFluxo
+      }));
+
+      if (error) throw error;
+
+      // Agrupar mensagens por ordem
+      const mensagensUnicas = data?.reduce((acc: any[], disparo: any) => {
+        const existing = acc.find(m => m.mensagem === disparo.mensagem);
+        if (!existing) {
+          acc.push({
+            mensagem: disparo.mensagem,
+            ordem: disparo.ordem,
+            fase: disparo.fase
+          });
+        }
+        return acc;
+      }, []);
+
+      setFluxoMensagens(prev => ({
+        ...prev,
+        [campanhaId]: mensagensUnicas || []
+      }));
+    } catch (error) {
+      console.error('Erro ao carregar mensagens do fluxo:', error);
+    }
+  };
+
   const fetchEmpresasCampanha = async (campanhaId: string) => {
     if (empresasCampanha[campanhaId]) return; // Já carregadas
 
@@ -150,19 +212,23 @@ const DisparosHistoricoPage: React.FC = () => {
         .from('disparos_agendados')
         .select('*')
         .eq('conexao_id', campanha.conexao_id)
-        .in('empresa_telefone', telefonesContactados)
         .order('criado_em', { ascending: true });
 
       if (error) throw error;
 
       // Combinar dados da campanha com status real dos disparos
       const empresasComStatus = empresasContactadas.map((empresaContactada: any) => {
-        const disparoReal = data?.find(d => d.empresa_telefone === empresaContactada.telefone);
+        // Buscar disparo por empresa_id (mais confiável) ou telefone
+        const disparoReal = data?.find(d => 
+          d.empresa_id === empresaContactada.id || 
+          d.empresa_telefone === empresaContactada.telefone ||
+          d.empresa_telefone === empresaContactada.telefone?.replace(/[^\d+]/g, '') // Remove formatação
+        );
         
         return {
           id: disparoReal?.id || `temp_${empresaContactada.id}`,
           empresa_id: empresaContactada.id.toString(),
-          empresa_nome: empresaContactada.titulo,
+          empresa_nome: empresaContactada.nome || empresaContactada.titulo,
           empresa_telefone: empresaContactada.telefone,
           empresa_website: empresaContactada.website,
           empresa_endereco: empresaContactada.endereco,
@@ -187,27 +253,80 @@ const DisparosHistoricoPage: React.FC = () => {
         ...prev,
         [campanhaId]: empresasComStatus
       }));
+      
+      // Recalcular métricas da campanha após carregar empresas
+      const metricasAtualizadas = await getDisparosMetrics(campanha.conexao_id, campanha);
+      setMetricasReais(prev => ({
+        ...prev,
+        [campanhaId]: metricasAtualizadas
+      }));
+
+      // Verificar se o status da campanha precisa ser atualizado
+      const statusAtual = campanha.status;
+      const statusCalculado = getCampanhaStatus({ ...campanha, id: campanhaId });
+      
+      if (statusAtual !== statusCalculado) {
+        await atualizarStatusCampanha(campanhaId, statusCalculado);
+        
+        // Atualizar o status na lista local
+        setCampanhas(prev => prev.map(c => 
+          c.id === campanhaId 
+            ? { ...c, status: statusCalculado }
+            : c
+        ));
+      }
     } catch (error) {
       console.error('Erro ao carregar empresas da campanha:', error);
     }
     setLoadingEmpresas(null);
   };
 
-  const toggleCampanha = (campanhaId: string) => {
+  const toggleCampanha = async (campanhaId: string) => {
     if (campanhaExpandida === campanhaId) {
       setCampanhaExpandida(null);
     } else {
       setCampanhaExpandida(campanhaId);
       fetchEmpresasCampanha(campanhaId);
+      
+      // Se for fluxo, carregar mensagens do fluxo
+      const campanha = campanhas.find(c => c.id === campanhaId);
+      if (campanha?.tipo_campanha === 'fluxo') {
+        fetchFluxoMensagens(campanhaId);
+      }
+      
+      // Recalcular métricas da campanha
+      if (campanha) {
+        const metricasAtualizadas = await getDisparosMetrics(campanha.conexao_id, campanha);
+        setMetricasReais(prev => ({
+          ...prev,
+          [campanhaId]: metricasAtualizadas
+        }));
+
+        // Verificar se o status da campanha precisa ser atualizado
+        const statusAtual = campanha.status;
+        const statusCalculado = getCampanhaStatus({ ...campanha, id: campanhaId });
+        
+        if (statusAtual !== statusCalculado) {
+          await atualizarStatusCampanha(campanhaId, statusCalculado);
+          
+          // Atualizar o status na lista local
+          setCampanhas(prev => prev.map(c => 
+            c.id === campanhaId 
+              ? { ...c, status: statusCalculado }
+              : c
+          ));
+        }
+      }
+      
       // Inicializar com 3 empresas visíveis
       setEmpresasVisiveis(prev => ({ ...prev, [campanhaId]: 3 }));
     }
   };
 
   const verMaisEmpresas = (campanhaId: string) => {
-    const atual = empresasVisiveis[campanhaId] || 3;
+    const atual = empresasVisiveis[campanhaId] || 5;
     const total = empresasCampanha[campanhaId]?.length || 0;
-    const proximo = Math.min(atual + 5, total);
+    const proximo = Math.min(atual + 10, total);
     setEmpresasVisiveis(prev => ({ ...prev, [campanhaId]: proximo }));
   };
 
@@ -226,29 +345,70 @@ const DisparosHistoricoPage: React.FC = () => {
     return Math.round((campanha.total_enviados / campanha.total_empresas) * 100);
   };
 
+  const getCampanhaStatus = (campanha: CampanhaDisparo) => {
+    const metricas = metricasReais[campanha.id];
+    if (!metricas) return campanha.status;
+
+    const totalEmpresas = campanha.empresas_detalhes?.length || 0;
+    const enviados = metricas.enviados || 0;
+    const processando = metricas.processando || 0;
+    const erros = metricas.erros || 0;
+
+    // Se todas as empresas foram processadas (enviadas + erros)
+    if (enviados + erros >= totalEmpresas) {
+      return 'concluida';
+    }
+    
+    // Se há pelo menos uma mensagem enviada ou processando
+    if (enviados > 0 || processando > 0) {
+      return 'em_andamento';
+    }
+    
+    // Se ainda não começou
+    return 'pendente';
+  };
+
+  const atualizarStatusCampanha = async (campanhaId: string, novoStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from('campanhas_disparo')
+        .update({ 
+          status: novoStatus,
+          atualizado_em: new Date().toISOString()
+        })
+        .eq('id', campanhaId);
+
+      if (error) {
+        console.error('Erro ao atualizar status da campanha:', error);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar status da campanha:', error);
+    }
+  };
+
   const getDisparosMetrics = async (conexaoId: string, campanha?: CampanhaDisparo) => {
     try {
       if (!campanha || !campanha.empresas_detalhes) {
         return { total: 0, enviados: 0, processando: 0, pendentes: 0, erros: 0 };
       }
 
-      // Extrair telefones das empresas contactadas
-      const telefonesContactados = campanha.empresas_detalhes.map((empresa: any) => empresa.telefone);
-
-      // Buscar apenas disparos das empresas contactadas
+      // Buscar todos os disparos desta campanha (conexao_id)
       const { data, error } = await supabase
         .from('disparos_agendados')
-        .select('status')
-        .eq('conexao_id', conexaoId)
-        .in('empresa_telefone', telefonesContactados);
+        .select('status, empresa_id')
+        .eq('conexao_id', conexaoId);
 
       if (error) throw error;
 
-      const total = data?.length || 0;
-      const enviados = data?.filter(d => d.status === 'enviado').length || 0;
-      const processando = data?.filter(d => d.status === 'processando').length || 0;
-      const pendentes = data?.filter(d => d.status === 'pendente').length || 0;
-      const erros = data?.filter(d => d.status === 'erro').length || 0;
+      // Filtrar apenas disparos das empresas que estão na campanha
+      const empresasIds = campanha.empresas_detalhes.map((empresa: any) => empresa.id);
+      const disparosFiltrados = data?.filter(d => empresasIds.includes(d.empresa_id)) || [];
+
+      const total = disparosFiltrados.length;
+      const enviados = disparosFiltrados.filter(d => d.status === 'enviado').length;
+      const processando = disparosFiltrados.filter(d => d.status === 'processando').length;
+      const pendentes = disparosFiltrados.filter(d => d.status === 'pendente').length;
+      const erros = disparosFiltrados.filter(d => d.status === 'erro').length;
 
       return { total, enviados, processando, pendentes, erros };
     } catch (error) {
@@ -301,12 +461,26 @@ const DisparosHistoricoPage: React.FC = () => {
                     <div className="flex items-center justify-between gap-4">
                       {/* Info Principal */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold text-foreground truncate">
-                            {campanha.nome}
-                          </h3>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full border ${STATUS_COLORS[campanha.status as keyof typeof STATUS_COLORS]}`}>
-                            {STATUS_LABELS[campanha.status as keyof typeof STATUS_LABELS]}
+                                              <div className="flex items-center gap-3 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-lg font-semibold text-foreground truncate">
+                              {campanha.nome}
+                            </h3>
+                            {campanha.tipo_campanha === 'fluxo' && fluxoNomes[campanha.id] && (
+                              <p className="text-sm text-purple-600 font-medium mt-1">
+                                {fluxoNomes[campanha.id]}
+                              </p>
+                            )}
+                          </div>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full border ${STATUS_COLORS[getCampanhaStatus(campanha) as keyof typeof STATUS_COLORS]}`}>
+                            {STATUS_LABELS[getCampanhaStatus(campanha) as keyof typeof STATUS_LABELS]}
+                          </span>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full border ${
+                            campanha.tipo_campanha === 'template' 
+                              ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800' 
+                              : 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800'
+                          }`}>
+                            {campanha.tipo_campanha === 'template' ? 'Template' : 'Fluxo'}
                           </span>
                         </div>
                         
@@ -409,6 +583,22 @@ const DisparosHistoricoPage: React.FC = () => {
                                     <span className="text-muted-foreground">Tipo de Mídia:</span>
                                     <span className="text-foreground">{campanha.tipo_midia || 'Texto'}</span>
                                   </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Tipo de Campanha:</span>
+                                    <span className={`font-medium ${
+                                      campanha.tipo_campanha === 'template' ? 'text-blue-600' : 'text-purple-600'
+                                    }`}>
+                                      {campanha.tipo_campanha === 'template' ? 'Template (Mensagem Única)' : 'Fluxo (Sequência de Mensagens)'}
+                                    </span>
+                                  </div>
+                                  {campanha.tipo_campanha === 'fluxo' && fluxoNomes[campanha.id] && (
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Nome do Fluxo:</span>
+                                      <span className="font-medium text-purple-600">
+                                        {fluxoNomes[campanha.id]}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -483,10 +673,33 @@ const DisparosHistoricoPage: React.FC = () => {
                           {/* Mensagem */}
                           {campanha.mensagem && (
                             <div className="mb-6">
-                              <h4 className="font-medium text-foreground mb-2">Mensagem Enviada</h4>
-                              <div className="bg-card border border-border rounded-lg p-4">
-                                <p className="text-sm text-foreground whitespace-pre-wrap">{campanha.mensagem}</p>
-                              </div>
+                              <h4 className="font-medium text-foreground mb-2">
+                                {campanha.tipo_campanha === 'fluxo' ? 'Sequência de Mensagens do Fluxo' : 'Mensagem Enviada'}
+                              </h4>
+                              
+                              {campanha.tipo_campanha === 'fluxo' && fluxoMensagens[campanha.id] ? (
+                                <div className="space-y-3">
+                                  {fluxoMensagens[campanha.id].map((mensagem, index) => (
+                                    <div key={index} className="bg-card border border-border rounded-lg p-4">
+                                      <div className="flex items-center gap-3 mb-2">
+                                        <div className="flex items-center justify-center w-6 h-6 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                                          {mensagem.ordem}
+                                        </div>
+                                        <span className="text-xs text-muted-foreground font-medium">
+                                          {mensagem.fase} • Ordem {mensagem.ordem}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm text-foreground whitespace-pre-wrap ml-9">
+                                        {mensagem.mensagem}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="bg-card border border-border rounded-lg p-4">
+                                  <p className="text-sm text-foreground whitespace-pre-wrap">{campanha.mensagem}</p>
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -561,6 +774,8 @@ const DisparosHistoricoPage: React.FC = () => {
                                         Tel: <span className="font-medium text-foreground">{empresa.empresa_telefone}</span>
                                       </p>
                                       
+
+                                      
                                       {/* Datas */}
                                       <p className="text-xs text-muted-foreground">
                                         Agendado: {new Date(empresa.criado_em).toLocaleString('pt-BR')}
@@ -624,83 +839,80 @@ const DisparosHistoricoPage: React.FC = () => {
                  </button>
                </div>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-3">
                 {campanhas.map((campanha) => (
                   <motion.div
                     key={campanha.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-card rounded-lg md:rounded-xl border border-border overflow-hidden shadow-sm"
+                    className="bg-card rounded-xl border border-border overflow-hidden shadow-sm hover:shadow-md transition-all duration-200"
                   >
                     {/* Header Mobile da Campanha */}
                     <div 
-                      className="p-3 md:p-4 cursor-pointer hover:bg-muted/5 transition-colors"
+                      className="p-4 cursor-pointer hover:bg-muted/5 transition-colors"
                       onClick={() => toggleCampanha(campanha.id)}
                     >
-                      <div className="flex items-start gap-3 md:gap-4">
-                        <div className="w-10 h-10 md:w-8 md:h-8 bg-accent/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <MessageSquare size={18} className="md:w-4 md:h-4 text-accent" />
+                      {/* Primeira linha: Nome da Campanha (Completo) */}
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="w-8 h-8 bg-accent/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <MessageSquare size={16} className="text-accent" />
                         </div>
-                        
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-medium text-foreground truncate mb-1">
+                          <h3 className="text-sm font-semibold text-foreground leading-tight mb-1">
                             {campanha.nome}
                           </h3>
-                          
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className={`px-1.5 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[campanha.status as keyof typeof STATUS_COLORS]}`}>
-                              {STATUS_LABELS[campanha.status as keyof typeof STATUS_LABELS]}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(campanha.criado_em).toLocaleDateString('pt-BR')}
-                            </span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(campanha.criado_em).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Segunda linha: Métricas, Status e Progresso */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1 border border-muted/20">
+                            <Users size={12} className="text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground font-medium">{metricasReais[campanha.id]?.total || 0}</span>
                           </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-xs">
-                              <div className="flex items-center gap-1 bg-muted/30 rounded-lg px-1.5 py-0.5">
-                                <Users size={11} className="text-muted-foreground" />
-                                <span className="text-muted-foreground font-medium">{metricasReais[campanha.id]?.total || 0}</span>
-                              </div>
-                              <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 rounded-lg px-1.5 py-0.5">
-                                <CheckCircle size={11} className="text-green-600" />
-                                <span className="text-green-600 font-medium">{metricasReais[campanha.id]?.enviados || 0}</span>
-                              </div>
-                              {metricasReais[campanha.id]?.processando > 0 && (
-                                <div className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-1.5 py-0.5">
-                                  <Clock size={11} className="text-blue-600" />
-                                  <span className="text-blue-600 font-medium">{metricasReais[campanha.id]?.processando || 0}</span>
-                                </div>
-                              )}
-                              {metricasReais[campanha.id]?.erros > 0 && (
-                                <div className="flex items-center gap-1 bg-red-50 dark:bg-red-900/20 rounded-lg px-1.5 py-0.5">
-                                  <XCircle size={11} className="text-red-600" />
-                                  <span className="text-red-600 font-medium">{metricasReais[campanha.id]?.erros || 0}</span>
-                                </div>
-                              )}
+                          <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 rounded-lg px-2 py-1 border border-green-200 dark:border-green-800">
+                            <CheckCircle size={12} className="text-green-600" />
+                            <span className="text-xs text-green-600 font-medium">{metricasReais[campanha.id]?.enviados || 0}</span>
+                          </div>
+                          {metricasReais[campanha.id]?.processando > 0 && (
+                            <div className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-2 py-1 border border-blue-200 dark:border-blue-800">
+                              <Clock size={12} className="text-blue-600" />
+                              <span className="text-xs text-blue-600 font-medium">{metricasReais[campanha.id]?.processando || 0}</span>
                             </div>
-                            
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs font-medium text-accent">
-                                {metricasReais[campanha.id]?.total ? Math.round((metricasReais[campanha.id].enviados / metricasReais[campanha.id].total) * 100) : 0}%
-                              </span>
-                              {campanhaExpandida === campanha.id ? (
-                                <ChevronUp size={14} className="text-muted-foreground" />
-                              ) : (
-                                <ChevronDown size={14} className="text-muted-foreground" />
-                              )}
+                          )}
+                          {metricasReais[campanha.id]?.erros > 0 && (
+                            <div className="flex items-center gap-1 bg-red-50 dark:bg-red-900/20 rounded-lg px-2 py-1 border border-red-200 dark:border-red-800">
+                              <XCircle size={12} className="text-red-600" />
+                              <span className="text-xs text-red-600 font-medium">{metricasReais[campanha.id]?.erros || 0}</span>
                             </div>
-                          </div>
-                          
-                          {/* Barra de Progresso Mobile */}
-                          <div className="w-full bg-muted rounded-full h-1 mt-2">
-                            <div 
-                              className="bg-accent h-1 rounded-full transition-all duration-300"
-                              style={{ 
-                                width: `${campanha.empresas_detalhes?.length ? Math.round((metricasReais[campanha.id]?.enviados || 0) / campanha.empresas_detalhes.length * 100) : 0}%` 
-                              }}
-                            ></div>
-                          </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-accent bg-accent/10 px-2 py-1 rounded-lg">
+                            {metricasReais[campanha.id]?.total ? Math.round((metricasReais[campanha.id].enviados / metricasReais[campanha.id].total) * 100) : 0}%
+                          </span>
+                          {campanhaExpandida === campanha.id ? (
+                            <ChevronUp size={16} className="text-muted-foreground" />
+                          ) : (
+                            <ChevronDown size={16} className="text-muted-foreground" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Terceira linha: Barra de Progresso */}
+                      <div className="w-full">
+                        <div className="w-full bg-muted rounded-full h-1.5">
+                          <div 
+                            className="bg-gradient-to-r from-green-500 to-green-600 h-1.5 rounded-full transition-all duration-300 shadow-sm"
+                            style={{ 
+                              width: `${campanha.empresas_detalhes?.length ? Math.round((metricasReais[campanha.id]?.enviados || 0) / campanha.empresas_detalhes.length * 100) : 0}%` 
+                            }}
+                          ></div>
                         </div>
                       </div>
                     </div>
@@ -715,6 +927,20 @@ const DisparosHistoricoPage: React.FC = () => {
                           className="overflow-hidden"
                         >
                           <div className="border-t border-border p-2.5 bg-muted/5 space-y-2.5">
+                            {/* Status e Tipo da Campanha */}
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className={`px-3 py-1.5 text-xs font-medium rounded-full ${STATUS_COLORS[getCampanhaStatus(campanha) as keyof typeof STATUS_COLORS]}`}>
+                                {STATUS_LABELS[getCampanhaStatus(campanha) as keyof typeof STATUS_LABELS]}
+                              </span>
+                              <span className={`px-3 py-1.5 text-xs font-medium rounded-full ${
+                                campanha.tipo_campanha === 'template' 
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800' 
+                                  : 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800'
+                              }`}>
+                                {campanha.tipo_campanha === 'template' ? 'Template' : 'Fluxo'}
+                              </span>
+                            </div>
+
                             {/* Informações Compactas */}
                             <div className="grid grid-cols-2 gap-1.5 text-xs">
                               <div className="bg-background rounded-lg p-1.5">
@@ -743,10 +969,33 @@ const DisparosHistoricoPage: React.FC = () => {
                             {/* Mensagem Mobile */}
                             {campanha.mensagem && (
                               <div>
-                                <h4 className="text-xs font-medium text-muted-foreground mb-1.5">MENSAGEM</h4>
-                                <div className="bg-background border border-border rounded-lg p-1.5">
-                                  <p className="text-xs text-foreground line-clamp-2">{campanha.mensagem}</p>
-                                </div>
+                                <h4 className="text-xs font-medium text-muted-foreground mb-1.5">
+                                  {campanha.tipo_campanha === 'fluxo' ? 'SEQUÊNCIA DE MENSAGENS' : 'MENSAGEM'}
+                                </h4>
+                                
+                                {campanha.tipo_campanha === 'fluxo' && fluxoMensagens[campanha.id] ? (
+                                  <div className="space-y-2">
+                                    {fluxoMensagens[campanha.id].map((mensagem, index) => (
+                                      <div key={index} className="bg-background border border-border rounded-lg p-2">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <div className="flex items-center justify-center w-5 h-5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-medium">
+                                            {mensagem.ordem}
+                                          </div>
+                                          <span className="text-[10px] text-muted-foreground font-medium">
+                                            {mensagem.fase} • Ordem {mensagem.ordem}
+                                          </span>
+                                        </div>
+                                        <p className="text-[10px] text-foreground ml-7 line-clamp-2">
+                                          {mensagem.mensagem}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="bg-background border border-border rounded-lg p-1.5">
+                                    <p className="text-xs text-foreground line-clamp-2">{campanha.mensagem}</p>
+                                  </div>
+                                )}
                               </div>
                             )}
 
@@ -808,11 +1057,12 @@ const DisparosHistoricoPage: React.FC = () => {
                                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent"></div>
                                 </div>
                               ) : empresasCampanha[campanha.id] ? (
-                                <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                                  {empresasCampanha[campanha.id]?.slice(0, empresasVisiveis[campanha.id] || 3).map((empresa) => (
-                                    <div key={empresa.id} className="bg-background rounded-lg p-1.5 border border-border">
-                                      <div className="flex items-center justify-between mb-1">
-                                        <h5 className="text-xs font-medium text-foreground truncate pr-2">
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                  {empresasCampanha[campanha.id]?.slice(0, empresasVisiveis[campanha.id] || 5).map((empresa) => (
+                                    <div key={empresa.id} className="bg-background rounded-lg p-2 border border-border">
+                                      {/* Header do Card */}
+                                      <div className="flex items-start justify-between mb-2">
+                                        <h5 className="text-xs font-medium text-foreground truncate pr-2 flex-1">
                                           {empresa.empresa_nome}
                                         </h5>
                                         <div className="flex-shrink-0">
@@ -822,7 +1072,9 @@ const DisparosHistoricoPage: React.FC = () => {
                                           {empresa.status === 'erro' && <XCircle className="h-3 w-3 text-red-500" />}
                                         </div>
                                       </div>
-                                      <div className="flex items-center gap-2">
+                                      
+                                      {/* Status */}
+                                      <div className="flex items-center gap-2 mb-1.5">
                                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
                                           empresa.status === 'enviado' ? 'bg-green-50 text-green-600 dark:bg-green-900/20' : 
                                           empresa.status === 'processando' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 
@@ -839,14 +1091,53 @@ const DisparosHistoricoPage: React.FC = () => {
                                           </span>
                                         )}
                                       </div>
+                                      
+                                      {/* Detalhes da Empresa */}
+                                      <div className="space-y-1">
+                                        {/* Avaliação */}
+                                        {empresa.avaliacao && (
+                                          <div className="flex items-center gap-1">
+                                            <Star className="h-3 w-3 text-yellow-500" />
+                                            <span className="text-[10px] text-muted-foreground">
+                                              {empresa.avaliacao.toFixed(1)}⭐ ({empresa.total_avaliacoes || 0})
+                                            </span>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Categoria */}
+                                        {empresa.categoria && (
+                                          <div className="flex items-center gap-1">
+                                            <Building className="h-3 w-3 text-muted-foreground" />
+                                            <span className="text-[10px] text-muted-foreground">
+                                              {empresa.categoria}
+                                            </span>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Telefone */}
+                                        <div className="flex items-center gap-1">
+                                          <Phone className="h-3 w-3 text-muted-foreground" />
+                                          <span className="text-[10px] text-muted-foreground">
+                                            {empresa.empresa_telefone}
+                                          </span>
+                                        </div>
+                                        
+                                        {/* Data Agendada */}
+                                        <div className="flex items-center gap-1">
+                                          <Calendar className="h-3 w-3 text-muted-foreground" />
+                                          <span className="text-[10px] text-muted-foreground">
+                                            Agendado: {new Date(empresa.criado_em).toLocaleString('pt-BR')}
+                                          </span>
+                                        </div>
+                                      </div>
                                     </div>
                                   ))}
-                                  {empresasCampanha[campanha.id] && (empresasVisiveis[campanha.id] || 3) < empresasCampanha[campanha.id].length && (
+                                  {empresasCampanha[campanha.id] && (empresasVisiveis[campanha.id] || 5) < empresasCampanha[campanha.id].length && (
                                     <button
                                       onClick={() => verMaisEmpresas(campanha.id)}
                                       className="w-full text-center py-2 text-accent text-xs font-medium bg-accent/5 rounded-lg border border-accent/20 hover:bg-accent/10 transition-colors"
                                     >
-                                      Ver mais {empresasCampanha[campanha.id].length - (empresasVisiveis[campanha.id] || 3)} empresas
+                                      Ver mais {empresasCampanha[campanha.id].length - (empresasVisiveis[campanha.id] || 5)} empresas
                                     </button>
                                   )}
                                 </div>

@@ -14,6 +14,15 @@ export interface Conversa {
   status: string;
   criado_em: string;
   atualizado_em: string;
+  // Novas colunas de informações da empresa
+  empresa_id?: number;
+  empresa_website?: string;
+  empresa_endereco?: string;
+  empresa_categoria?: string;
+  empresa_avaliacao?: number;
+  empresa_total_avaliacoes?: number;
+  empresa_posicao?: number;
+  empresa_links_agendamento?: string;
 }
 
 export interface EstatisticasConversas {
@@ -39,7 +48,17 @@ export const buscarConversas = async (
   try {
     let query = supabase
       .from('conversas')
-      .select('*', { count: 'exact' })
+      .select(`
+        *,
+        empresa_id,
+        empresa_website,
+        empresa_endereco,
+        empresa_categoria,
+        empresa_avaliacao,
+        empresa_total_avaliacoes,
+        empresa_posicao,
+        empresa_links_agendamento
+      `, { count: 'exact' })
       .order('criado_em', { ascending: false });
 
     // Aplicar filtros
@@ -99,7 +118,17 @@ export const buscarConversasPorTelefone = async (telefone: string) => {
   try {
     const { data, error } = await supabase
       .from('conversas')
-      .select('*')
+      .select(`
+        *,
+        empresa_id,
+        empresa_website,
+        empresa_endereco,
+        empresa_categoria,
+        empresa_avaliacao,
+        empresa_total_avaliacoes,
+        empresa_posicao,
+        empresa_links_agendamento
+      `)
       .eq('telefone', telefone)
       .order('criado_em', { ascending: true });
 

@@ -43,6 +43,7 @@ const DashboardPage: React.FC = () => {
   const [ultimosDisparos, setUltimosDisparos] = useState<UltimoDisparo[]>([]);
   const [totalDisparos, setTotalDisparos] = useState(0);
   const [taxaResposta, setTaxaResposta] = useState(0);
+  const [negociosGanhos, setNegociosGanhos] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -57,6 +58,18 @@ const DashboardPage: React.FC = () => {
       const result = await buscarEstatisticasFunil();
       if (result.success && result.data) {
         setStats(result.data);
+      }
+
+      // Carregar negócios ganhos (empresas com status 'ganhos')
+      const { data: empresasGanhos, error: empresasGanhosError } = await supabase
+        .from('empresas')
+        .select('id')
+        .eq('status', 'ganhos');
+
+      if (empresasGanhosError) {
+        console.error('Erro ao carregar negócios ganhos:', empresasGanhosError);
+      } else {
+        setNegociosGanhos(empresasGanhos?.length || 0);
       }
 
       // Carregar campanhas de disparo
@@ -260,7 +273,7 @@ const DashboardPage: React.FC = () => {
                 <Star size={16} className="text-purple-500 md:text-[20px]" />
               </div>
               <div>
-                <span className="text-lg md:text-2xl font-bold text-purple-500">1</span>
+                <span className="text-lg md:text-2xl font-bold text-purple-500">{negociosGanhos}</span>
                 <span className="text-xs md:text-sm text-muted-foreground ml-1">negócios</span>
               </div>
             </div>
