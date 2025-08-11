@@ -52,29 +52,128 @@ export const formatEmail = (email: string): string => {
 };
 
 /**
- * Validar CPF (apenas números, 11 dígitos)
+ * Validação de CPF usando o algoritmo oficial brasileiro
+ * Fonte: Receita Federal do Brasil
  */
-export const validateCPF = (cpf: string): boolean => {
-  const numbers = cpf.replace(/\D/g, '');
-  return numbers.length === 11;
+
+/**
+ * Remove caracteres não numéricos de uma string
+ */
+export const removeNonDigits = (value: string): string => {
+  return value.replace(/\D/g, '');
 };
 
 /**
- * Máscara para CPF
+ * Valida se um CPF é válido usando o algoritmo oficial
+ * @param cpf - CPF a ser validado (com ou sem formatação)
+ * @returns true se o CPF for válido, false caso contrário
  */
-export const formatCPF = (value: string): string => {
-  const numbers = value.replace(/\D/g, '');
+export const validateCPF = (cpf: string): boolean => {
+  // Remove formatação
+  const cleanCPF = removeNonDigits(cpf);
   
-  if (numbers.length <= 3) {
-    return numbers;
-  } else if (numbers.length <= 6) {
-    return `${numbers.slice(0, 3)}.${numbers.slice(3)}`;
-  } else if (numbers.length <= 9) {
-    return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6)}`;
-  } else {
-    return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-${numbers.slice(9, 11)}`;
+  // Verifica se tem 11 dígitos
+  if (cleanCPF.length !== 11) {
+    return false;
   }
+  
+  // Verifica se todos os dígitos são iguais (CPF inválido)
+  if (/^(\d)\1{10}$/.test(cleanCPF)) {
+    return false;
+  }
+  
+  // Validação do primeiro dígito verificador
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(cleanCPF.charAt(i)) * (10 - i);
+  }
+  
+  let remainder = sum % 11;
+  let firstDigit = remainder < 2 ? 0 : 11 - remainder;
+  
+  if (parseInt(cleanCPF.charAt(9)) !== firstDigit) {
+    return false;
+  }
+  
+  // Validação do segundo dígito verificador
+  sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += parseInt(cleanCPF.charAt(i)) * (11 - i);
+  }
+  
+  remainder = sum % 11;
+  let secondDigit = remainder < 2 ? 0 : 11 - remainder;
+  
+  if (parseInt(cleanCPF.charAt(10)) !== secondDigit) {
+    return false;
+  }
+  
+  return true;
 };
+
+/**
+ * Formata CPF no padrão brasileiro (000.000.000-00)
+ * @param cpf - CPF sem formatação
+ * @returns CPF formatado
+ */
+export const formatCPF = (cpf: string): string => {
+  const cleanCPF = removeNonDigits(cpf);
+  
+  if (cleanCPF.length <= 3) return cleanCPF;
+  if (cleanCPF.length <= 6) return `${cleanCPF.slice(0, 3)}.${cleanCPF.slice(3)}`;
+  if (cleanCPF.length <= 9) return `${cleanCPF.slice(0, 3)}.${cleanCPF.slice(3, 6)}.${cleanCPF.slice(6)}`;
+  
+  return `${cleanCPF.slice(0, 3)}.${cleanCPF.slice(3, 6)}.${cleanCPF.slice(6, 9)}-${cleanCPF.slice(9, 11)}`;
+};
+
+/**
+ * Valida e formata CPF, retornando erro se inválido
+ * @param cpf - CPF a ser validado
+ * @returns objeto com CPF formatado e status de validação
+ */
+export const validateAndFormatCPF = (cpf: string): { 
+  formatted: string; 
+  isValid: boolean; 
+  error?: string; 
+} => {
+  const cleanCPF = removeNonDigits(cpf);
+  
+  if (cleanCPF.length === 0) {
+    return { formatted: '', isValid: false, error: 'CPF é obrigatório' };
+  }
+  
+  if (cleanCPF.length < 11) {
+    return { formatted: formatCPF(cleanCPF), isValid: false, error: 'CPF deve ter 11 dígitos' };
+  }
+  
+  if (!validateCPF(cleanCPF)) {
+    return { formatted: formatCPF(cleanCPF), isValid: false, error: 'CPF inválido' };
+  }
+  
+  return { formatted: formatCPF(cleanCPF), isValid: true };
+};
+
+/**
+ * Exemplos de CPFs válidos para teste
+ */
+export const VALID_CPF_EXAMPLES = [
+  '111.444.777-35',
+  '123.456.789-09',
+  '987.654.321-00',
+  '000.000.001-91',
+  '111.111.111-11' // Este é inválido (todos dígitos iguais)
+];
+
+/**
+ * Exemplos de CPFs inválidos para teste
+ */
+export const INVALID_CPF_EXAMPLES = [
+  '111.111.111-11', // Todos dígitos iguais
+  '123.456.789-10', // Dígitos verificadores incorretos
+  '000.000.000-00', // Todos dígitos iguais
+  '111.444.777-34', // Primeiro dígito verificador incorreto
+  '111.444.777-36'  // Segundo dígito verificador incorreto
+];
 
 /**
  * Mensagens de erro padronizadas

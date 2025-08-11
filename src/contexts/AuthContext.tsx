@@ -7,6 +7,8 @@ interface Profile {
   email: string;
   full_name?: string;
   avatar_url?: string;
+  whatsapp?: string;
+  cpf?: string;
   role: 'admin' | 'user';
   is_active: boolean;
   created_at: string;
@@ -19,7 +21,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string, whatsapp: string, cpf: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   resendConfirmationEmail: (email: string) => Promise<{ error: any }>;
@@ -74,6 +76,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: user.email || '',
         full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
         avatar_url: user.user_metadata?.avatar_url || '',
+        whatsapp: user.user_metadata?.whatsapp || '',
+        cpf: user.user_metadata?.cpf || '',
         role: user.user_metadata?.role || 'user',
         is_active: true,
         created_at: user.created_at,
@@ -91,6 +95,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: user.email || '',
         full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
         avatar_url: '',
+        whatsapp: user.user_metadata?.whatsapp || '',
+        cpf: user.user_metadata?.cpf || '',
         role: 'user',
         is_active: true,
         created_at: user.created_at,
@@ -182,9 +188,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (email: string, password: string, fullName: string, whatsapp: string, cpf: string) => {
     try {
-      console.log('📝 Tentando fazer cadastro...', { email, fullName });
+      console.log('📝 Tentando fazer cadastro...', { email, fullName, whatsapp, cpf });
       
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -192,7 +198,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         options: {
           data: {
             full_name: fullName,
-            name: fullName
+            name: fullName,
+            whatsapp: whatsapp,
+            cpf: cpf
           }
         }
       });
