@@ -1764,11 +1764,14 @@ const DisparosPage: React.FC = () => {
                           </p>
                           <div className="flex flex-wrap gap-1.5">
                             {[
-                              { name: 'Nome da Empresa', value: '{{empresa_nome}}' },
-                              { name: 'Telefone', value: '{{empresa_telefone}}' },
-                              { name: 'Endereço', value: '{{empresa_endereco}}' },
-                              { name: 'Website', value: '{{empresa_website}}' },
-                              { name: 'Categoria', value: '{{empresa_categoria}}' }
+                              { name: 'Nome da Empresa', value: '{empresa_nome}' },
+                              { name: 'Telefone', value: '{telefone}' },
+                              { name: 'Endereço', value: '{endereco}' },
+                              { name: 'Website', value: '{website}' },
+                              { name: 'Categoria', value: '{categoria}' },
+                              { name: 'Cidade', value: '{cidade}' },
+                              { name: 'Avaliação', value: '{avaliacao}' },
+                              { name: 'Posição', value: '{posicao}' }
                             ].map((variable) => (
                               <button
                                 key={variable.value}

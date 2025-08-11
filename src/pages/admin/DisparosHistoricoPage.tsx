@@ -16,7 +16,12 @@ import {
   TrendingUp,
   Building,
   Phone,
-  Target
+  Target,
+  X,
+  Send,
+  Paperclip,
+  User as Smile,
+  ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -95,6 +100,14 @@ const DisparosHistoricoPage: React.FC = () => {
   const [loadingEmpresas, setLoadingEmpresas] = useState<string | null>(null);
   const [fluxoMensagens, setFluxoMensagens] = useState<Record<string, any[]>>({});
   const [fluxoNomes, setFluxoNomes] = useState<Record<string, string>>({});
+  
+  // Estados para o modal de conversas
+  const [showConversaModal, setShowConversaModal] = useState(false);
+  const [empresaSelecionada, setEmpresaSelecionada] = useState<EmpresaCampanha | null>(null);
+  const [mensagensConversa, setMensagensConversa] = useState<any[]>([]);
+  const [novaMensagem, setNovaMensagem] = useState('');
+  const [loadingMensagens, setLoadingMensagens] = useState(false);
+  
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -337,6 +350,92 @@ const DisparosHistoricoPage: React.FC = () => {
       // Extrair apenas os números do telefone para busca
       const telefoneNumeros = empresa.empresa_telefone.replace(/[^\d]/g, '');
       navigate(`/admin/conversas?telefone=${telefoneNumeros}`);
+    }
+  };
+
+  // Função para abrir modal de conversas
+  const openConversaModal = async (empresa: EmpresaCampanha) => {
+    setEmpresaSelecionada(empresa);
+    setShowConversaModal(true);
+    await loadMensagensConversa(empresa.empresa_telefone);
+  };
+
+  // Função para carregar mensagens da conversa
+  const loadMensagensConversa = async (telefone: string) => {
+    setLoadingMensagens(true);
+    try {
+      // Limpar telefone para busca (remover formatação e sufixos)
+      let telefoneLimpo = telefone.replace(/[^\d]/g, '');
+      
+      // Se o telefone não começar com 55, adicionar
+      if (!telefoneLimpo.startsWith('55')) {
+        telefoneLimpo = '55' + telefoneLimpo;
+      }
+      
+      // Se tiver 13 dígitos (55 + DDD + 9 + 8 dígitos), remover o 9 extra
+      if (telefoneLimpo.length === 13) {
+        telefoneLimpo = telefoneLimpo.substring(0, 4) + telefoneLimpo.substring(5);
+      }
+      
+      console.log('Telefone original:', telefone);
+      console.log('Telefone limpo:', telefoneLimpo);
+      console.log('Buscando mensagens para telefone:', telefoneLimpo);
+      
+      // Buscar mensagens na tabela conversas
+      const { data, error } = await supabase
+        .from('conversas')
+        .select('*')
+        .eq('telefone', telefoneLimpo)
+        .order('criado_em', { ascending: true });
+
+      if (error) throw error;
+
+      console.log('Mensagens encontradas:', data?.length || 0);
+      if (data && data.length > 0) {
+        console.log('Primeira mensagem:', data[0]);
+      }
+      setMensagensConversa(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar mensagens:', error);
+      setMensagensConversa([]);
+    } finally {
+      setLoadingMensagens(false);
+    }
+  };
+
+  // Função para fechar modal
+  const closeConversaModal = () => {
+    setShowConversaModal(false);
+    setEmpresaSelecionada(null);
+    setMensagensConversa([]);
+    setNovaMensagem('');
+  };
+
+  // Função para obter iniciais do nome
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // Função para obter ícone de status da mensagem
+  const getStatusIcon = (status: string, fromMe: boolean) => {
+    if (!fromMe) return null;
+    
+    switch (status) {
+      case 'SENT':
+        return <CheckCircle size={12} className="text-muted-foreground" />;
+      case 'DELIVERED':
+        return <CheckCircle size={12} className="text-blue-500" />;
+      case 'READ':
+        return <CheckCircle size={12} className="text-green-500" />;
+      case 'SERVER_ACK':
+        return <CheckCircle size={12} className="text-muted-foreground" />;
+      default:
+        return <Clock size={12} className="text-muted-foreground" />;
     }
   };
 
@@ -659,7 +758,11 @@ const DisparosHistoricoPage: React.FC = () => {
                             ) : empresasCampanha[campanha.id] ? (
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {empresasCampanha[campanha.id]?.map((empresa) => (
-                                  <div key={empresa.id} className="bg-card rounded-lg p-3 border border-border">
+                                  <div 
+                                    key={empresa.id} 
+                                    className="bg-card rounded-lg p-3 border border-border cursor-pointer hover:bg-muted/5 transition-colors"
+                                    onClick={() => openConversaModal(empresa)}
+                                  >
                                     <div className="flex items-start justify-between mb-2">
                                       <h5 className="font-medium text-sm text-foreground truncate pr-2">
                                         {empresa.empresa_nome}
@@ -1086,6 +1189,150 @@ const DisparosHistoricoPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal de Conversa */}
+      <AnimatePresence>
+        {showConversaModal && empresaSelecionada && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 md:p-4 overflow-hidden"
+            onClick={closeConversaModal}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background border border-border rounded-xl w-full max-w-[380px] sm:max-w-md md:max-w-2xl lg:max-w-4xl h-[75vh] sm:h-[65vh] md:h-[60vh] flex flex-col conversa-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header do Modal - WhatsApp Style */}
+              <div className="flex items-center justify-between p-3 border-b border-border bg-[#075e54] text-white rounded-t-xl">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <button
+                    onClick={closeConversaModal}
+                    className="md:hidden p-1.5 hover:bg-white/10 rounded-full flex-shrink-0"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <div className="w-9 h-9 bg-accent rounded-full flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
+                    {getInitials(empresaSelecionada.empresa_nome)}
+                  </div>
+                  <div className="flex-1 min-w-0 mr-2">
+                    <h3 className="font-medium text-sm truncate">
+                      {empresaSelecionada.empresa_nome}
+                    </h3>
+                    <div className="flex items-center gap-1 text-xs opacity-90">
+                      <Phone size={10} className="flex-shrink-0" />
+                      <span className="truncate text-xs">{empresaSelecionada.empresa_telefone}</span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={closeConversaModal}
+                  className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Informações da Campanha */}
+              <div className="p-3 border-b border-border bg-muted/20">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <MessageSquare size={12} />
+                  <span>Campanha: {campanhas.find(c => c.id === empresaSelecionada.conexao_id)?.nome || 'N/A'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                  <Calendar size={12} />
+                  <span>Enviado: {new Date(empresaSelecionada.updated_at || empresaSelecionada.criado_em).toLocaleString('pt-BR')}</span>
+                </div>
+              </div>
+
+              {/* Mensagens - Scroll Apenas do Modal */}
+              <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 md:space-y-4 bg-muted/20">
+                {loadingMensagens ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
+                  </div>
+                ) : mensagensConversa.length > 0 ? (
+                  mensagensConversa.map((mensagem) => (
+                    <div
+                      key={mensagem.id}
+                      className={`flex ${mensagem.from_me ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[240px] sm:max-w-[280px] md:max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
+                          mensagem.from_me
+                            ? 'bg-[#dcf8c6] text-[#075e54] rounded-br-md'
+                            : 'bg-white text-[#075e54] border border-gray-200 rounded-bl-md'
+                        }`}
+                      >
+                        <p className="text-sm leading-relaxed">{mensagem.mensagem}</p>
+                        <div className="flex items-center justify-end gap-1 mt-2 text-[#075e54]/60">
+                          <span className="text-xs">
+                            {new Date(mensagem.criado_em).toLocaleTimeString('pt-BR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                          {getStatusIcon(mensagem.status, mensagem.from_me)}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <MessageSquare size={24} className="mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Nenhuma mensagem encontrada</p>
+                    <p className="text-xs mt-1">As mensagens aparecerão aqui quando houver conversa</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Input de Nova Mensagem - WhatsApp Style */}
+              <div className="p-3 md:p-4 border-t border-border bg-background rounded-b-xl">
+                <div className="flex items-center gap-3">
+                  <button className="p-2 hover:bg-muted rounded-full transition-colors">
+                    <Paperclip size={18} className="text-muted-foreground" />
+                  </button>
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={novaMensagem}
+                      onChange={(e) => setNovaMensagem(e.target.value)}
+                      placeholder="Digite uma mensagem..."
+                      className="w-full px-4 py-2.5 bg-muted border border-border rounded-full focus:outline-none focus:border-[#075e54] pr-12 text-sm"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && novaMensagem.trim()) {
+                          // Aqui você implementaria o envio da mensagem
+                          console.log('Enviar mensagem:', novaMensagem);
+                          setNovaMensagem('');
+                        }
+                      }}
+                    />
+                    <button className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-background rounded-full transition-colors">
+                      <Smile size={18} className="text-muted-foreground" />
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (novaMensagem.trim()) {
+                        // Implementar envio de mensagem
+                        console.log('Enviar mensagem:', novaMensagem);
+                        setNovaMensagem('');
+                      }
+                    }}
+                    className="p-2.5 bg-[#075e54] text-white rounded-full hover:bg-[#075e54]/90 transition-colors shadow-sm"
+                  >
+                    <Send size={18} />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

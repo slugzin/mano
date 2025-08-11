@@ -379,8 +379,8 @@ const ConexoesPage: React.FC = () => {
         {/* Desktop Card */}
         <div className={`hidden md:block relative border rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.02] ${
           isConnected 
-            ? 'bg-card border-accent/40' 
-            : 'bg-card border-border hover:border-accent/30'
+            ? 'bg-card border-green-500/40' 
+            : 'bg-card border-border hover:border-green-500/30'
         }`}>
           
           <div className="p-4">
@@ -389,7 +389,7 @@ const ConexoesPage: React.FC = () => {
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 {/* Avatar */}
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden ${
-                  isConnected ? 'bg-accent' : 'bg-muted'
+                  isConnected ? 'bg-green-500' : 'bg-muted'
                 }`}>
                   {instance.profilePicUrl ? (
                     <img 
@@ -418,10 +418,10 @@ const ConexoesPage: React.FC = () => {
                     </div>
                   )}
                   <div className={`text-xs flex items-center gap-1 mt-1 ${
-                    isConnected ? 'text-accent' : 'text-muted-foreground'
+                    isConnected ? 'text-green-500' : 'text-muted-foreground'
                   }`}>
                     <div className={`w-2 h-2 rounded-full ${
-                      isConnected ? 'bg-accent' : 'bg-muted-foreground'
+                      isConnected ? 'bg-green-500' : 'bg-muted-foreground'
                     }`} />
                     {isConnected ? 'Conectado' : 'Desconectado'}
                   </div>
@@ -443,7 +443,7 @@ const ConexoesPage: React.FC = () => {
                     {!isConnected && (
                       <button
                         onClick={(e) => handleMenuAction('qrcode', e)}
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-accent/5 transition-colors flex items-center gap-2 text-foreground"
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-green-500/5 transition-colors flex items-center gap-2 text-foreground"
                       >
                         <QrCode size={14} />
                         Conectar
@@ -473,14 +473,14 @@ const ConexoesPage: React.FC = () => {
         {/* Mobile Compact Card */}
         <div className={`md:hidden bg-card border border-border rounded-lg p-3 transition-all duration-200 ${
           isConnected 
-            ? 'border-accent/40 bg-accent/5' 
+            ? 'border-green-500/40 bg-green-500/5' 
             : 'border-border'
         }`}>
           
           <div className="flex items-center gap-2">
             {/* Avatar */}
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 ${
-              isConnected ? 'bg-accent' : 'bg-muted'
+              isConnected ? 'bg-green-500' : 'bg-muted'
             }`}>
               {instance.profilePicUrl ? (
                 <img 
@@ -505,11 +505,11 @@ const ConexoesPage: React.FC = () => {
                   {instance.name}
                 </h3>
                 <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                  isConnected ? 'bg-accent' : 'bg-muted-foreground'
+                  isConnected ? 'bg-green-500' : 'bg-muted-foreground'
                 }`} />
               </div>
               <div className={`text-xs flex items-center gap-1 ${
-                isConnected ? 'text-accent font-medium' : 'text-muted-foreground'
+                isConnected ? 'text-green-500 font-medium' : 'text-muted-foreground'
               }`}>
                 {isConnected ? '✓ Conectado' : '● Desconectado'}
               </div>
@@ -520,7 +520,7 @@ const ConexoesPage: React.FC = () => {
               {!isConnected && (
                 <button
                   onClick={(e) => handleMenuAction('qrcode', e)}
-                  className="p-1.5 bg-accent/10 hover:bg-accent/20 rounded-lg transition-colors text-accent"
+                  className="p-1.5 bg-green-500/10 hover:bg-green-500/20 rounded-lg transition-colors text-green-500"
                   title="Conectar"
                 >
                   <QrCode size={14} />

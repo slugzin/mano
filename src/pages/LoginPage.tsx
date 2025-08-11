@@ -33,10 +33,14 @@ const LoginPage: React.FC = () => {
   // Função para formatar WhatsApp
   const formatWhatsApp = (value: string) => {
     const numbers = value.replace(/\D/g, '');
+    
+    // Se for apenas números, aplicar formatação
     if (numbers.length <= 2) return numbers;
     if (numbers.length <= 6) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
     if (numbers.length <= 10) return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6)}`;
-    return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6, 10)}`;
+    if (numbers.length <= 11) return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7)}`;
+    
+    return numbers; // Retorna apenas números se for muito longo
   };
 
   // Função para validar CPF em tempo real
@@ -221,9 +225,9 @@ const LoginPage: React.FC = () => {
                       value={whatsapp}
                       onChange={(e) => setWhatsapp(formatWhatsApp(e.target.value))}
                       className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/50 transition-all duration-200 text-sm sm:text-base"
-                      placeholder="(11) 99999-9999"
+                      placeholder="(41) 98844-8798 ou (41) 8844-8798"
                       required={!isLogin}
-                      maxLength={15}
+                      maxLength={16}
                     />
                   </div>
                 </div>
