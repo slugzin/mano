@@ -350,17 +350,17 @@ const DashboardPage: React.FC = () => {
               </div>
             </button>
 
-            {/* Ver Relatórios */}
+            {/* Ver Histórico */}
             <button
-              onClick={() => navigate('/admin/fluxos')}
+              onClick={() => navigate('/admin/historico')}
               className="bg-card hover:bg-accent/5 border border-border hover:border-accent/50 rounded-lg md:rounded-xl p-3 md:p-4 flex items-center gap-3 md:gap-4 transition-all duration-200 group text-left"
             >
               <div className="w-10 h-10 md:w-12 md:h-12 bg-accent/10 rounded-lg md:rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-110">
-                <BarChart3 size={18} className="md:w-6 md:h-6 text-accent" />
+                <Activity size={18} className="md:w-6 md:h-6 text-accent" />
               </div>
               <div>
-                <p className="text-sm font-medium text-foreground">Ver Relatórios</p>
-                <p className="text-xs text-muted-foreground mt-1">Acompanhe o desempenho das suas campanhas</p>
+                <p className="text-sm font-medium text-foreground">Ver Histórico</p>
+                <p className="text-xs text-muted-foreground mt-1">Acompanhe o histórico completo das suas campanhas</p>
               </div>
             </button>
           </div>

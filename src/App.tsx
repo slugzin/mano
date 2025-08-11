@@ -18,6 +18,7 @@ import EmpresasPage from './pages/admin/EmpresasPage';
 import DisparosPage from './pages/admin/DisparosPage';
 import ConversasPage from './pages/admin/ConversasPage';
 import DisparosHistoricoPage from './pages/admin/DisparosHistoricoPage';
+import HistoricoPage from './pages/admin/HistoricoPage';
 import CampanhasPage from './pages/admin/CampanhasPage';
 import ConexoesPage from './pages/admin/ConexoesPage';
 import NewSettingsPage from './pages/admin/NewSettingsPage';
@@ -57,6 +58,7 @@ const AppContent: React.FC = () => {
             <Route path="empresas" element={<EmpresasPage />} />
             <Route path="conexoes" element={<ConexoesPage />} />
             <Route path="campanhas" element={<DisparosHistoricoPage />} />
+            <Route path="historico" element={<HistoricoPage />} />
             <Route path="conversas" element={<ConversasPage />} />
             <Route path="perfil" element={<ProfilePage />} />
             <Route path="fluxos" element={<FluxosPage />} />
