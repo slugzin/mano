@@ -28,7 +28,7 @@ const Footer: React.FC = () => {
             <h3 className="text-lg font-semibold mb-4 text-white">Links Rápidos</h3>
             <ul className="space-y-2">
               <li>
-                <Link to="/" className="text-gray-400 hover:text-pink-400 transition">Início</Link>
+                <Link to="/login" className="text-gray-400 hover:text-pink-400 transition">Início</Link>
               </li>
               <li>
                 <Link to="/gallery" className="text-gray-400 hover:text-pink-400 transition">Galeria</Link>

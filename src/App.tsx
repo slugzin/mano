@@ -9,7 +9,7 @@ import { PlanLimitsProvider, usePlanLimits } from './contexts/PlanLimitsContext'
 import UpgradeModal from './components/ui/UpgradeModal';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import SessionMonitor from './components/auth/SessionMonitor';
-import HomePage from './pages/HomePage';
+
 import AdminLayout from './pages/admin/AdminLayout';
 import DashboardPage from './pages/admin/DashboardPage';
 import SettingsPage from './pages/admin/SettingsPage';
@@ -37,8 +37,8 @@ const AppContent: React.FC = () => {
     <>
       <Router>
         <Routes>
-          {/* Página inicial */}
-          <Route path="/" element={<HomePage />} />
+          {/* Redirecionar página inicial para login */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
           
           {/* Página de login */}
           <Route path="/login" element={<LoginPage />} />
@@ -65,8 +65,8 @@ const AppContent: React.FC = () => {
             <Route path="planos" element={<PlanosPage />} />
           </Route>
           
-          {/* Rota catch-all para redirecionar para home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Rota catch-all para redirecionar para login */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>
 

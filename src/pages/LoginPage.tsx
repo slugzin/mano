@@ -146,37 +146,38 @@ const LoginPage: React.FC = () => {
       
       {/* Pontos decorativos (estrelas) */}
       <div className="absolute inset-0">
-        <div className="absolute top-20 left-20 w-1 h-1 bg-white rounded-full opacity-60 animate-pulse"></div>
-        <div className="absolute top-40 right-32 w-1 h-1 bg-white rounded-full opacity-40 animate-pulse" style={{animationDelay: '1s'}}></div>
-        <div className="absolute top-60 left-1/4 w-1 h-1 bg-white rounded-full opacity-50 animate-pulse" style={{animationDelay: '2s'}}></div>
-        <div className="absolute top-80 right-1/3 w-1 h-1 bg-white rounded-full opacity-30 animate-pulse" style={{animationDelay: '3s'}}></div>
-        <div className="absolute top-96 left-1/2 w-1 h-1 bg-white rounded-full opacity-60 animate-pulse" style={{animationDelay: '0.5s'}}></div>
+        <div className="absolute top-16 sm:top-20 left-16 sm:left-20 w-1 h-1 bg-white rounded-full opacity-60 animate-pulse"></div>
+        <div className="absolute top-32 sm:top-40 right-24 sm:right-32 w-1 h-1 bg-white rounded-full opacity-40 animate-pulse" style={{animationDelay: '1s'}}></div>
+        <div className="absolute top-48 sm:top-60 left-1/4 w-1 h-1 bg-white rounded-full opacity-50 animate-pulse" style={{animationDelay: '2s'}}></div>
+        <div className="absolute top-64 sm:top-80 right-1/3 w-1 h-1 bg-white rounded-full opacity-30 animate-pulse" style={{animationDelay: '3s'}}></div>
+        <div className="absolute top-80 sm:top-96 left-1/2 w-1 h-1 bg-white rounded-full opacity-60 animate-pulse" style={{animationDelay: '0.5s'}}></div>
       </div>
 
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md mx-auto">
           {/* Logo/Header */}
-          <div className="text-center mb-8">
+          <div className="text-center mb-6 sm:mb-8">
             {/* Logo CaptaZap */}
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-purple-600 to-purple-800 rounded-2xl mb-6 shadow-2xl">
-              <div className="grid grid-cols-2 gap-1 w-10 h-10">
-                <div className="w-4 h-4 bg-white rounded-sm"></div>
-                <div className="w-4 h-4 bg-white rounded-sm"></div>
-                <div className="w-4 h-4 bg-white rounded-sm"></div>
-                <div className="w-4 h-4 bg-white rounded-sm"></div>
+            <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-r from-purple-600 to-purple-800 rounded-2xl mb-4 sm:mb-6 shadow-2xl">
+              <div className="grid grid-cols-2 gap-1 w-8 h-8 sm:w-10 sm:h-10">
+                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-sm"></div>
+                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-sm"></div>
+                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-sm"></div>
+                <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-sm"></div>
               </div>
             </div>
             
             {/* Tag de marca */}
-            <div className="inline-flex items-center px-4 py-2 bg-black/40 border border-white/20 rounded-full mb-4">
-              <div className="w-3 h-3 bg-purple-500 rounded-sm mr-2"></div>
-              <span className="text-xs text-white/80 font-medium">CaptaZap - Automação de Prospecção</span>
+            <div className="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2 bg-black/40 border border-white/20 rounded-full mb-3 sm:mb-4">
+              <div className="w-2 h-2 sm:w-3 sm:h-3 bg-purple-500 rounded-sm mr-2"></div>
+              <span className="text-xs text-white/80 font-medium hidden sm:inline">CaptaZap - Automação de Prospecção</span>
+              <span className="text-xs text-white/80 font-medium sm:hidden">CaptaZap</span>
             </div>
 
-            <h1 className="text-4xl font-bold text-white mb-3">
+            <h1 className="text-2xl sm:text-4xl font-bold text-white mb-2 sm:mb-3">
               {isLogin ? 'Bem-vindo de volta!' : 'Criar conta'}
             </h1>
-            <p className="text-white/70 text-lg">
+            <p className="text-white/70 text-sm sm:text-lg px-2">
               {isLogin 
                 ? 'Entre com suas credenciais para acessar o sistema'
                 : 'Preencha os dados para criar sua conta'
@@ -185,21 +186,21 @@ const LoginPage: React.FC = () => {
           </div>
 
           {/* Form */}
-          <div className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-3xl shadow-2xl p-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 md:p-8">
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
               {/* Nome completo (apenas no cadastro) */}
               {!isLogin && (
                 <div>
-                  <label className="block text-sm font-medium text-white/90 mb-3">
+                  <label className="block text-sm font-medium text-white/90 mb-2 sm:mb-3">
                     Nome completo
                   </label>
                   <div className="relative">
-                    <User size={20} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50" />
+                    <User size={18} className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-white/50" />
                     <input
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/50 transition-all duration-200"
+                      className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/50 transition-all duration-200 text-sm sm:text-base"
                       placeholder="Digite seu nome completo"
                       required={!isLogin}
                     />
@@ -210,16 +211,16 @@ const LoginPage: React.FC = () => {
               {/* WhatsApp (apenas no cadastro) */}
               {!isLogin && (
                 <div>
-                  <label className="block text-sm font-medium text-white/90 mb-3">
+                  <label className="block text-sm font-medium text-white/90 mb-2 sm:mb-3">
                     WhatsApp
                   </label>
                   <div className="relative">
-                    <Phone size={20} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50" />
+                    <Phone size={18} className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-white/50" />
                     <input
                       type="tel"
                       value={whatsapp}
                       onChange={(e) => setWhatsapp(formatWhatsApp(e.target.value))}
-                      className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/50 transition-all duration-200"
+                      className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/50 transition-all duration-200 text-sm sm:text-base"
                       placeholder="(11) 99999-9999"
                       required={!isLogin}
                       maxLength={15}
@@ -231,17 +232,17 @@ const LoginPage: React.FC = () => {
               {/* CPF (apenas no cadastro) */}
               {!isLogin && (
                 <div>
-                  <label className="block text-sm font-medium text-white/90 mb-3">
+                  <label className="block text-sm font-medium text-white/90 mb-2 sm:mb-3">
                     CPF
                   </label>
                   <div className="relative">
-                    <CreditCard size={20} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50" />
+                    <CreditCard size={18} className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-white/50" />
                     <input
                       type="text"
                       value={cpf}
                       onChange={(e) => handleCpfChange(e.target.value)}
                       onBlur={handleCpfBlur}
-                      className={`w-full pl-12 pr-12 py-4 bg-white/5 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/50 transition-all duration-200 ${
+                      className={`w-full pl-10 sm:pl-12 pr-10 sm:pr-12 py-3 sm:py-4 bg-white/5 border rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/50 transition-all duration-200 text-sm sm:text-base ${
                         cpfValidation.isTouched
                           ? cpfValidation.isValid
                             ? 'border-green-500/50'
@@ -255,11 +256,11 @@ const LoginPage: React.FC = () => {
                     
                     {/* Ícone de validação */}
                     {cpfValidation.isTouched && (
-                      <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                      <div className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2">
                         {cpfValidation.isValid ? (
-                          <CheckCircle size={20} className="text-green-400" />
+                          <CheckCircle size={18} className="text-green-400" />
                         ) : (
-                          <XCircle size={20} className="text-red-400" />
+                          <XCircle size={18} className="text-red-400" />
                         )}
                       </div>
                     )}
@@ -284,16 +285,16 @@ const LoginPage: React.FC = () => {
 
               {/* Email */}
               <div>
-                <label className="block text-sm font-medium text-white/90 mb-3">
+                <label className="block text-sm font-medium text-white/90 mb-2 sm:mb-3">
                   Email
                 </label>
                 <div className="relative">
-                  <Mail size={20} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50" />
+                  <Mail size={18} className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-white/50" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/50 transition-all duration-200"
+                    className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/50 transition-all duration-200 text-sm sm:text-base"
                     placeholder="seu@email.com"
                     required
                   />
@@ -302,32 +303,32 @@ const LoginPage: React.FC = () => {
 
               {/* Senha */}
               <div>
-                <label className="block text-sm font-medium text-white/90 mb-3">
+                <label className="block text-sm font-medium text-white/90 mb-2 sm:mb-3">
                   Senha
                 </label>
                 <div className="relative">
-                  <Lock size={20} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50" />
+                  <Lock size={18} className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-white/50" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-12 pr-12 py-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/50 transition-all duration-200"
+                    className="w-full pl-10 sm:pl-12 pr-10 sm:pr-12 py-3 sm:py-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/50 transition-all duration-200 text-sm sm:text-base"
                     placeholder="Digite sua senha"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white/50 hover:text-white/70 transition-colors"
+                    className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-white/50 hover:text-white/70 transition-colors p-1"
                   >
-                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
               </div>
 
               {/* Erro */}
               {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 sm:p-4">
                   <p className="text-red-400 text-sm">{error}</p>
                 </div>
               )}
@@ -336,12 +337,12 @@ const LoginPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting || (!isLogin && !cpfValidation.isValid)}
-                className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-purple-500/25 transform hover:scale-[1.02]"
+                className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-semibold text-base sm:text-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-purple-500/25 transform hover:scale-[1.02] active:scale-[0.98]"
               >
                 {isSubmitting ? (
                   <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                    {isLogin ? 'Entrando...' : 'Criando conta...'}
+                    <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-white mr-2 sm:mr-3"></div>
+                    <span className="text-sm sm:text-base">{isLogin ? 'Entrando...' : 'Criando conta...'}</span>
                   </div>
                 ) : (
                   isLogin ? 'Entrar' : 'Criar conta'
@@ -350,8 +351,8 @@ const LoginPage: React.FC = () => {
             </form>
 
             {/* Toggle entre login/cadastro */}
-            <div className="mt-8 text-center">
-              <p className="text-white/70">
+            <div className="mt-6 sm:mt-8 text-center">
+              <p className="text-white/70 text-sm sm:text-base">
                 {isLogin ? 'Não tem uma conta?' : 'Já tem uma conta?'}
                 <button
                   onClick={() => {
@@ -373,7 +374,7 @@ const LoginPage: React.FC = () => {
 
             {/* Esqueci a senha */}
             {isLogin && (
-              <div className="mt-6 text-center">
+              <div className="mt-4 sm:mt-6 text-center">
                 <button
                   onClick={() => navigate('/forgot-password')}
                   className="text-sm text-white/60 hover:text-white/80 transition-colors"
@@ -385,8 +386,8 @@ const LoginPage: React.FC = () => {
           </div>
 
           {/* Footer */}
-          <div className="text-center mt-8">
-            <p className="text-sm text-white/50">
+          <div className="text-center mt-6 sm:mt-8">
+            <p className="text-xs sm:text-sm text-white/50">
               © 2024 CaptaZap. Todos os direitos reservados.
             </p>
           </div>

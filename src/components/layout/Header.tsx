@@ -24,14 +24,14 @@ const Header: React.FC = () => {
       }`}
     >
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-        <Link to="/" className="flex items-center">
+        <Link to="/login" className="flex items-center">
                       <span className="text-pink-400 text-2xl font-bold">Privadinho</span>
             <span className="text-gray-400 text-sm ml-2">Espaço da putaria</span>
         </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-8">
-          <Link to="/" className="text-white hover:text-pink-300 transition">
+          <Link to="/login" className="text-white hover:text-pink-300 transition">
             Início
           </Link>
           <Link to="/gallery" className="text-white hover:text-pink-300 transition">
@@ -79,7 +79,7 @@ const Header: React.FC = () => {
         <div className="md:hidden bg-black/95 backdrop-blur-sm">
           <div className="container mx-auto px-4 py-4 flex flex-col space-y-4">
             <Link 
-              to="/" 
+              to="/login" 
               className="text-white hover:text-pink-300 py-2 transition"
               onClick={() => setIsMenuOpen(false)}
             >

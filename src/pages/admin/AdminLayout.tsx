@@ -149,7 +149,7 @@ const AdminLayout: React.FC = () => {
             p-4 border-b border-border flex items-center gap-3
             ${isExpanded ? 'justify-between' : 'justify-center'}
           `}>
-            <Link to="/" className="flex items-center gap-2 min-w-0 group">
+            <Link to="/login" className="flex items-center gap-2 min-w-0 group">
               <div className="relative">
                 <span className="text-3xl font-bold bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
                   {isExpanded ? 'Capta' : 'C'}
