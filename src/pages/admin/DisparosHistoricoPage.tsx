@@ -330,6 +330,16 @@ const DisparosHistoricoPage: React.FC = () => {
     setEmpresasVisiveis(prev => ({ ...prev, [campanhaId]: proximo }));
   };
 
+  // Função para redirecionar para conversas
+  const redirectToConversas = (empresa: EmpresaCampanha) => {
+    // Só redireciona se o status for 'enviado' ou 'concluido'
+    if (empresa.status === 'enviado' || empresa.status === 'concluido') {
+      // Extrair apenas os números do telefone para busca
+      const telefoneNumeros = empresa.empresa_telefone.replace(/[^\d]/g, '');
+      navigate(`/admin/conversas?telefone=${telefoneNumeros}`);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('pt-BR', {
       day: '2-digit',
@@ -446,40 +456,40 @@ const DisparosHistoricoPage: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {campanhas.map((campanha) => (
+              {campanhas.map((campanha, index) => (
                 <motion.div
                   key={campanha.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-card rounded-xl border border-border shadow-sm overflow-hidden"
+                  transition={{ 
+                    duration: 0.3, 
+                    delay: index * 0.05
+                  }}
+                  className="bg-card rounded-lg border border-border hover:border-purple-200 transition-colors overflow-hidden"
                 >
+                  {/* Linha decorativa roxa */}
+                  <div className="h-1 bg-purple-500"></div>
+                  
                   {/* Header da Campanha */}
                   <div 
-                    className="p-6 cursor-pointer hover:bg-muted/5 transition-colors"
+                    className="p-4 cursor-pointer hover:bg-muted/20 transition-colors"
                     onClick={() => toggleCampanha(campanha.id)}
                   >
                     <div className="flex items-center justify-between gap-4">
                       {/* Info Principal */}
-                    <div className="flex-1 min-w-0">
-                                              <div className="flex items-center gap-3 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-2">
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-lg font-semibold text-foreground truncate">
+                            <h3 className="text-base font-medium text-foreground truncate">
                               {campanha.nome}
                             </h3>
                             {campanha.tipo_campanha === 'fluxo' && fluxoNomes[campanha.id] && (
-                              <p className="text-sm text-purple-600 font-medium mt-1">
+                              <p className="text-sm text-muted-foreground mt-1">
                                 {fluxoNomes[campanha.id]}
                               </p>
                             )}
                           </div>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full border ${STATUS_COLORS[getCampanhaStatus(campanha) as keyof typeof STATUS_COLORS]}`}>
-                            {STATUS_LABELS[getCampanhaStatus(campanha) as keyof typeof STATUS_LABELS]}
-                          </span>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full border ${
-                            campanha.tipo_campanha === 'template' 
-                              ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800' 
-                              : 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800'
-                          }`}>
+                          <span className="px-2 py-1 text-xs font-medium bg-muted text-muted-foreground rounded">
                             {campanha.tipo_campanha === 'template' ? 'Template' : 'Fluxo'}
                           </span>
                         </div>
@@ -502,49 +512,25 @@ const DisparosHistoricoPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Métricas e Controles */}
-                      <div className="flex items-center gap-4">
-                        {/* Progresso */}
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="flex items-center gap-4">
-                            <div className="text-center">
-                              <div className="text-xl font-bold text-green-600">{metricasReais[campanha.id]?.enviados || 0}</div>
-                              <div className="text-xs text-muted-foreground">Enviados</div>
-                            </div>
-                            {metricasReais[campanha.id]?.processando > 0 && (
-                              <div className="text-center">
-                                <div className="text-xl font-bold text-blue-600">{metricasReais[campanha.id]?.processando || 0}</div>
-                                <div className="text-xs text-muted-foreground">Processando</div>
-                              </div>
-                            )}
-                            {metricasReais[campanha.id]?.erros > 0 && (
-                              <div className="text-center">
-                                <div className="text-xl font-bold text-red-600">{metricasReais[campanha.id]?.erros || 0}</div>
-                                <div className="text-xs text-muted-foreground">Erros</div>
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Barra de Progresso */}
-                          <div className="w-32 bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                              style={{ 
-                                width: `${campanha.empresas_detalhes?.length ? Math.round((metricasReais[campanha.id]?.enviados || 0) / campanha.empresas_detalhes.length * 100) : 0}%` 
-                              }}
-                            ></div>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
+                      {/* Métricas e Controles - Design Minimalista */}
+                      <div className="flex items-center justify-between">
+                        {/* Métricas Simples */}
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span>{metricasReais[campanha.id]?.enviados || 0} enviados</span>
+                          <span>•</span>
+                          <span>{campanha.empresas_detalhes?.length || 0} empresas</span>
+                          <span>•</span>
+                          <span className="text-purple-600 font-medium">
                             {campanha.empresas_detalhes?.length ? Math.round((metricasReais[campanha.id]?.enviados || 0) / campanha.empresas_detalhes.length * 100) : 0}% concluído
-                          </div>
+                          </span>
                         </div>
 
-                        {/* Botão Expandir */}
-                        <button className="p-2 hover:bg-muted/10 rounded-lg transition-colors">
+                        {/* Botão Expandir Simples */}
+                        <button className="p-2 text-muted-foreground hover:text-foreground transition-colors">
                           {campanhaExpandida === campanha.id ? (
-                            <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                            <ChevronUp className="h-4 w-4" />
                           ) : (
-                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                            <ChevronDown className="h-4 w-4" />
                           )}
                         </button>
                       </div>
@@ -560,144 +546,92 @@ const DisparosHistoricoPage: React.FC = () => {
                         exit={{ height: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="border-t border-border p-6 bg-muted/5">
-                          {/* Informações Detalhadas */}
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                            <div className="space-y-4">
-                              <div>
-                                <h4 className="font-medium text-foreground mb-2">Detalhes da Campanha</h4>
-                                <div className="space-y-2 text-sm">
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Conexão:</span>
-                                    <span className="text-foreground font-medium">{campanha.conexao_id}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Modalidade:</span>
-                                    <span className="text-foreground">{campanha.modalidade_pesquisa || 'N/A'}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Status Empresas:</span>
-                                    <span className="text-foreground">{campanha.status_empresas || 'N/A'}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Tipo de Mídia:</span>
-                                    <span className="text-foreground">{campanha.tipo_midia || 'Texto'}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Tipo de Campanha:</span>
-                                    <span className={`font-medium ${
-                                      campanha.tipo_campanha === 'template' ? 'text-blue-600' : 'text-purple-600'
-                                    }`}>
-                                      {campanha.tipo_campanha === 'template' ? 'Template (Mensagem Única)' : 'Fluxo (Sequência de Mensagens)'}
-                                    </span>
-                                  </div>
-                                  {campanha.tipo_campanha === 'fluxo' && fluxoNomes[campanha.id] && (
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Nome do Fluxo:</span>
-                                      <span className="font-medium text-purple-600">
-                                        {fluxoNomes[campanha.id]}
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
+                        <div className="border-t border-border p-4 bg-muted/5">
+                          {/* Layout Simplificado - Informações Essenciais */}
+                          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
+                            {/* Conexão */}
+                            <div className="bg-background border border-border rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Phone className="h-4 w-4 text-green-600" />
+                                <span className="text-xs font-medium text-muted-foreground">Conexão</span>
                               </div>
-
-                              {/* Cidades */}
-                              {campanha.cidades_encontradas && campanha.cidades_encontradas.length > 0 && (
-                                <div>
-                                  <h4 className="font-medium text-foreground mb-2">Cidades</h4>
-                                  <div className="flex flex-wrap gap-1">
-                                    {campanha.cidades_encontradas.slice(0, 5).map((cidade) => (
-                                      <span key={cidade} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                        {cidade}
-                                      </span>
-                                    ))}
-                                    {campanha.cidades_encontradas.length > 5 && (
-                                      <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                                        +{campanha.cidades_encontradas.length - 5} mais
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
+                              <p className="text-sm font-medium text-foreground">{campanha.conexao_id}</p>
                             </div>
 
-                            <div className="space-y-4">
-                              {/* Categorias */}
-                              {campanha.categorias_encontradas && campanha.categorias_encontradas.length > 0 && (
-                                <div>
-                                  <h4 className="font-medium text-foreground mb-2">Categorias</h4>
-                                  <div className="flex flex-wrap gap-1">
-                                    {campanha.categorias_encontradas.slice(0, 4).map((categoria) => (
-                                      <span key={categoria} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
-                                        {categoria}
-                                      </span>
-                                    ))}
-                                    {campanha.categorias_encontradas.length > 4 && (
-                                      <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                                        +{campanha.categorias_encontradas.length - 4} mais
-                                      </span>
-                                    )}
-                                  </div>
+                            {/* Categorias */}
+                            {campanha.categorias_encontradas && campanha.categorias_encontradas.length > 0 && (
+                              <div className="bg-background border border-border rounded-lg p-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Building className="h-4 w-4 text-purple-600" />
+                                  <span className="text-xs font-medium text-muted-foreground">Categorias</span>
                                 </div>
-                              )}
-
-                              {/* Estatísticas */}
-                              <div>
-                                <h4 className="font-medium text-foreground mb-2">Estatísticas</h4>
-                                <div className="space-y-2 text-sm">
-                                  {campanha.avaliacao_media && (
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Avaliação Média:</span>
-                                      <span className="text-foreground font-medium">{campanha.avaliacao_media.toFixed(1)}⭐</span>
-                                    </div>
-                                  )}
-                                  {campanha.total_avaliacoes_soma && (
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Total Avaliações:</span>
-                                      <span className="text-foreground">{campanha.total_avaliacoes_soma}</span>
-                                    </div>
-                                  )}
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Taxa de Sucesso:</span>
-                                    <span className="text-foreground font-medium">
-                                      {campanha.empresas_detalhes?.length ? 
-                                        Math.round((metricasReais[campanha.id]?.enviados || 0) / campanha.empresas_detalhes.length * 100) : 0}%
+                                <div className="flex flex-wrap gap-1">
+                                  {campanha.categorias_encontradas.slice(0, 2).map((categoria) => (
+                                    <span key={categoria} className="px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded-full border border-purple-200">
+                                      {categoria}
                                     </span>
-                                  </div>
+                                  ))}
+                                  {campanha.categorias_encontradas.length > 2 && (
+                                    <span className="px-2 py-1 bg-muted text-muted-foreground text-xs rounded-full border border-border">
+                                      +{campanha.categorias_encontradas.length - 2}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
+                            )}
+
+                            {/* Taxa de Sucesso */}
+                            <div className="bg-background border border-border rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-1">
+                                <TrendingUp className="h-4 w-4 text-green-600" />
+                                <span className="text-xs font-medium text-muted-foreground">Taxa de Sucesso</span>
+                              </div>
+                              <p className="text-lg font-bold text-green-600">
+                                {campanha.total_empresas > 0 
+                                  ? ((campanha.total_enviados / campanha.total_empresas) * 100).toFixed(1) 
+                                  : 0}%
+                              </p>
+                            </div>
+
+                            {/* Empresas Contactadas */}
+                            <div className="bg-background border border-border rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Target className="h-4 w-4 text-blue-600" />
+                                <span className="text-xs font-medium text-muted-foreground">Empresas</span>
+                              </div>
+                              <p className="text-lg font-bold text-blue-600">
+                                {campanha.empresas_detalhes?.length || 0}
+                              </p>
                             </div>
                           </div>
 
-                          {/* Mensagem */}
+                          {/* Mensagem Enviada - Versão Compacta */}
                           {campanha.mensagem && (
-                            <div className="mb-6">
-                              <h4 className="font-medium text-foreground mb-2">
-                                {campanha.tipo_campanha === 'fluxo' ? 'Sequência de Mensagens do Fluxo' : 'Mensagem Enviada'}
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                                <MessageSquare className="h-4 w-4 text-blue-600" />
+                                {campanha.tipo_campanha === 'fluxo' ? 'Sequência de Mensagens' : 'Mensagem Enviada'}
                               </h4>
                               
                               {campanha.tipo_campanha === 'fluxo' && fluxoMensagens[campanha.id] ? (
-                                <div className="space-y-3">
-                                  {fluxoMensagens[campanha.id].map((mensagem, index) => (
-                                    <div key={index} className="bg-card border border-border rounded-lg p-4">
-                                      <div className="flex items-center gap-3 mb-2">
-                                        <div className="flex items-center justify-center w-6 h-6 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
-                                          {mensagem.ordem}
-                                        </div>
-                                        <span className="text-xs text-muted-foreground font-medium">
-                                          {mensagem.fase} • Ordem {mensagem.ordem}
-                                        </span>
+                                <div className="bg-background border border-border rounded-lg p-3 max-h-40 overflow-y-auto">
+                                  <div className="space-y-2">
+                                    {fluxoMensagens[campanha.id].slice(0, 3).map((mensagem, index) => (
+                                      <div key={index} className="text-sm">
+                                        <span className="font-medium text-purple-600">#{mensagem.ordem}</span>
+                                        <span className="text-muted-foreground ml-2">{mensagem.mensagem.substring(0, 100)}...</span>
                                       </div>
-                                      <p className="text-sm text-foreground whitespace-pre-wrap ml-9">
-                                        {mensagem.mensagem}
+                                    ))}
+                                    {fluxoMensagens[campanha.id].length > 3 && (
+                                      <p className="text-xs text-muted-foreground">
+                                        +{fluxoMensagens[campanha.id].length - 3} mensagens no fluxo
                                       </p>
-                                    </div>
-                                  ))}
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
-                                <div className="bg-card border border-border rounded-lg p-4">
-                                  <p className="text-sm text-foreground whitespace-pre-wrap">{campanha.mensagem}</p>
+                                <div className="bg-background border border-border rounded-lg p-3">
+                                  <p className="text-sm text-foreground line-clamp-3">{campanha.mensagem}</p>
                                 </div>
                               )}
                             </div>
@@ -840,13 +774,19 @@ const DisparosHistoricoPage: React.FC = () => {
                </div>
             ) : (
               <div className="space-y-3">
-                {campanhas.map((campanha) => (
+                {campanhas.map((campanha, index) => (
                   <motion.div
                     key={campanha.id}
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-card rounded-xl border border-border overflow-hidden shadow-sm hover:shadow-md transition-all duration-200"
+                    transition={{ 
+                      duration: 0.2, 
+                      delay: index * 0.03
+                    }}
+                    className="bg-card rounded-lg border border-border overflow-hidden"
                   >
+                    {/* Linha decorativa roxa mobile */}
+                    <div className="h-0.5 bg-purple-500"></div>
                     {/* Header Mobile da Campanha */}
                     <div 
                       className="p-4 cursor-pointer hover:bg-muted/5 transition-colors"
@@ -867,54 +807,29 @@ const DisparosHistoricoPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Segunda linha: Métricas, Status e Progresso */}
+                      {/* Segunda linha: Métricas Simples - Mobile */}
                       <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1 border border-muted/20">
-                            <Users size={12} className="text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground font-medium">{metricasReais[campanha.id]?.total || 0}</span>
-                          </div>
-                          <div className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 rounded-lg px-2 py-1 border border-green-200 dark:border-green-800">
-                            <CheckCircle size={12} className="text-green-600" />
-                            <span className="text-xs text-green-600 font-medium">{metricasReais[campanha.id]?.enviados || 0}</span>
-                          </div>
-                          {metricasReais[campanha.id]?.processando > 0 && (
-                            <div className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-2 py-1 border border-blue-200 dark:border-blue-800">
-                              <Clock size={12} className="text-blue-600" />
-                              <span className="text-xs text-blue-600 font-medium">{metricasReais[campanha.id]?.processando || 0}</span>
-                            </div>
-                          )}
-                          {metricasReais[campanha.id]?.erros > 0 && (
-                            <div className="flex items-center gap-1 bg-red-50 dark:bg-red-900/20 rounded-lg px-2 py-1 border border-red-200 dark:border-red-800">
-                              <XCircle size={12} className="text-red-600" />
-                              <span className="text-xs text-red-600 font-medium">{metricasReais[campanha.id]?.erros || 0}</span>
-                            </div>
-                          )}
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <span>{metricasReais[campanha.id]?.enviados || 0} enviados</span>
+                          <span>•</span>
+                          <span>{metricasReais[campanha.id]?.total || 0} empresas</span>
                         </div>
                         
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-accent bg-accent/10 px-2 py-1 rounded-lg">
+                          <span className="text-xs text-purple-600 font-medium">
                             {metricasReais[campanha.id]?.total ? Math.round((metricasReais[campanha.id].enviados / metricasReais[campanha.id].total) * 100) : 0}%
                           </span>
-                          {campanhaExpandida === campanha.id ? (
-                            <ChevronUp size={16} className="text-muted-foreground" />
-                          ) : (
-                            <ChevronDown size={16} className="text-muted-foreground" />
-                          )}
+                          <button className="p-1 text-muted-foreground">
+                            {campanhaExpandida === campanha.id ? (
+                              <ChevronUp size={14} />
+                            ) : (
+                              <ChevronDown size={14} />
+                            )}
+                          </button>
                         </div>
                       </div>
 
-                      {/* Terceira linha: Barra de Progresso */}
-                      <div className="w-full">
-                        <div className="w-full bg-muted rounded-full h-1.5">
-                          <div 
-                            className="bg-gradient-to-r from-green-500 to-green-600 h-1.5 rounded-full transition-all duration-300 shadow-sm"
-                            style={{ 
-                              width: `${campanha.empresas_detalhes?.length ? Math.round((metricasReais[campanha.id]?.enviados || 0) / campanha.empresas_detalhes.length * 100) : 0}%` 
-                            }}
-                          ></div>
-                        </div>
-                      </div>
+
                     </div>
 
                     {/* Detalhes Expandidos - Mobile */}
@@ -1059,7 +974,20 @@ const DisparosHistoricoPage: React.FC = () => {
                               ) : empresasCampanha[campanha.id] ? (
                                 <div className="space-y-2 max-h-48 overflow-y-auto">
                                   {empresasCampanha[campanha.id]?.slice(0, empresasVisiveis[campanha.id] || 5).map((empresa) => (
-                                    <div key={empresa.id} className="bg-background rounded-lg p-2 border border-border">
+                                    <div 
+                                      key={empresa.id} 
+                                      className={`bg-background rounded-lg p-2 border border-border transition-colors ${
+                                        empresa.status === 'enviado' || empresa.status === 'concluido' 
+                                          ? 'cursor-pointer hover:bg-accent/5 hover:border-accent/40' 
+                                          : ''
+                                      }`}
+                                      onClick={() => redirectToConversas(empresa)}
+                                      title={
+                                        empresa.status === 'enviado' || empresa.status === 'concluido' 
+                                          ? 'Clique para ver a conversa' 
+                                          : ''
+                                      }
+                                    >
                                       {/* Header do Card */}
                                       <div className="flex items-start justify-between mb-2">
                                         <h5 className="text-xs font-medium text-foreground truncate pr-2 flex-1">

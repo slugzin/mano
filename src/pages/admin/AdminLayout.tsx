@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNewUser } from '../../hooks/useNewUser';
-import WelcomeMessage from '../../components/auth/WelcomeMessage';
+// import WelcomeMessage from '../../components/auth/WelcomeMessage'; // Removido
 import {
   LayoutDashboard,
   Settings,
@@ -17,7 +17,8 @@ import {
   Clock,
   Rocket,
   BarChart3,
-  Building
+  Building,
+  Crown
 } from '../../utils/icons';
 import { ThemeSwitcher } from '../../components/ui/ThemeSwitcher';
 
@@ -35,11 +36,12 @@ const AdminLayout: React.FC = () => {
     navigate('/login');
   };
 
-  // Mostrar mensagem de boas-vindas para novos usuários
+  // Mostrar mensagem de boas-vindas para novos usuários - DESABILITADO
   React.useEffect(() => {
-    if (!isChecking && isNewUser) {
-      setShowWelcome(true);
-    }
+    // Popup de boas-vindas desabilitado por solicitação do usuário
+    // if (!isChecking && isNewUser) {
+    //   setShowWelcome(true);
+    // }
   }, [isNewUser, isChecking]);
 
   const handleInitializeData = async () => {
@@ -109,6 +111,12 @@ const AdminLayout: React.FC = () => {
       path: '/admin/fluxos',
       gradient: 'from-purple-500 to-pink-500'
     }
+    // {
+    //   icon: <Crown size={20} />,
+    //   label: 'Planos',
+    //   path: '/admin/planos',
+    //   gradient: 'from-yellow-500 to-orange-500'
+    // }
   ];
 
   // Bottom navigation bar para mobile
@@ -117,7 +125,7 @@ const AdminLayout: React.FC = () => {
     { icon: <Target size={20} />, label: 'Leads', path: '/admin/leads' },
     { icon: <Building size={20} />, label: 'Empresas', path: '/admin/empresas' },
     { icon: <Rocket size={20} />, label: 'Disparos', path: '/admin/disparos' },
-    { icon: <BarChart3 size={20} />, label: 'Fluxos', path: '/admin/fluxos' },
+    { icon: <User size={20} />, label: 'Perfil', path: '/admin/perfil' },
   ];
 
   return (
@@ -144,13 +152,13 @@ const AdminLayout: React.FC = () => {
             <Link to="/" className="flex items-center gap-2 min-w-0 group">
               <div className="relative">
                 <span className="text-3xl font-bold bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
-                  {isExpanded ? 'Prospect' : 'P'}
+                  {isExpanded ? 'Capta' : 'C'}
                 </span>
                 <Target size={12} className="absolute -top-1 -right-1 text-accent animate-pulse" />
               </div>
               {isExpanded && (
                 <span className="text-xs text-accent bg-gradient-to-r from-accent/20 to-primary/20 border border-accent/30 px-2 py-1 rounded-lg backdrop-blur-sm">
-                  CRM
+                  Zap
                 </span>
               )}
             </Link>
@@ -284,7 +292,8 @@ const AdminLayout: React.FC = () => {
         </div>
       </nav>
 
-      {/* Modal de boas-vindas para novos usuários */}
+      {/* Modal de boas-vindas para novos usuários - REMOVIDO */}
+      {/* 
       {showWelcome && (
         <WelcomeMessage
           onClose={() => setShowWelcome(false)}
@@ -292,6 +301,7 @@ const AdminLayout: React.FC = () => {
           isInitializing={isInitializing}
         />
       )}
+      */}
     </div>
   );
 };

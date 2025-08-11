@@ -18,13 +18,15 @@ import {
   CheckCircle,
   Eye,
   Zap,
-  ChevronRight
+  ChevronRight,
+  LayoutDashboard
 } from '../../utils/icons';
 import { buscarEstatisticasFunil, type EstatisticasFunil } from '../../services/edgeFunctions';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
 import LoadingScreen from '../../components/ui/LoadingScreen';
+
 
 interface UltimoDisparo {
   id: string;
@@ -229,73 +231,76 @@ const DashboardPage: React.FC = () => {
         <div className="hidden md:block">
           <PageHeader
             title="Dashboard"
-            subtitle="Acompanhe suas métricas e acesse rapidamente as principais ações do seu CRM."
-            icon={<Grid size={32} className="text-primary" />}
+            subtitle="Bem-vindo ao CaptaZap - Sua central de prospecção"
+            icon={<LayoutDashboard className="w-6 h-6" />}
           />
         </div>
 
-        {/* KPIs Principais - Responsivo */}
+        {/* KPIs Principais - Design Minimalista */}
         <div className="grid grid-cols-2 gap-2 md:gap-4 mb-4 md:mb-6 w-full mt-4">
           {/* Empresas Buscadas */}
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg md:rounded-xl p-3 md:p-4">
-            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                <Target size={16} className="text-emerald-500 md:text-[20px]" />
-              </div>
+          <div className="bg-card border border-border rounded-lg md:rounded-xl p-3 md:p-4 hover:border-accent/40 transition-all shadow-sm">
+            <div className="flex items-center justify-between mb-2">
               <div>
-                <span className="text-lg md:text-2xl font-bold text-emerald-500">{stats?.totalEmpresas || 0}</span>
+                <span className="text-lg md:text-2xl font-bold text-foreground">{stats?.totalEmpresas || 0}</span>
                 <span className="text-xs md:text-sm text-muted-foreground ml-1">empresas</span>
+              </div>
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-accent/15 rounded-lg flex items-center justify-center">
+                <Target size={16} className="text-accent md:text-[20px]" />
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Empresas Buscadas</h3>
-            <p className="text-[10px] md:text-xs text-muted-foreground mt-1 md:mt-1">Total de empresas encontradas</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-1">Total de empresas encontradas</p>
           </div>
 
           {/* Taxa de Resposta */}
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg md:rounded-xl p-3 md:p-4">
-            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                <BarChart3 size={16} className="text-blue-500 md:text-[20px]" />
-              </div>
+          <div className="bg-card border border-border rounded-lg md:rounded-xl p-3 md:p-4 hover:border-accent/40 transition-all shadow-sm">
+            <div className="flex items-center justify-between mb-2">
               <div>
-                <span className="text-lg md:text-2xl font-bold text-blue-500">{taxaResposta}%</span>
+                <span className="text-lg md:text-2xl font-bold text-foreground">{taxaResposta}%</span>
                 <span className="text-xs md:text-sm text-muted-foreground ml-1">taxa</span>
+              </div>
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-accent/15 rounded-lg flex items-center justify-center">
+                <BarChart3 size={16} className="text-accent md:text-[20px]" />
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Taxa de Resposta</h3>
-            <p className="text-[10px] md:text-xs text-muted-foreground mt-1 md:mt-1">Média de respostas recebidas</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-1">Média de respostas recebidas</p>
           </div>
 
           {/* Negócios Ganhos */}
-          <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg md:rounded-xl p-3 md:p-4">
-            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                <Star size={16} className="text-purple-500 md:text-[20px]" />
-              </div>
+          <div className="bg-card border border-border rounded-lg md:rounded-xl p-3 md:p-4 hover:border-accent/40 transition-all shadow-sm">
+            <div className="flex items-center justify-between mb-2">
               <div>
-                <span className="text-lg md:text-2xl font-bold text-purple-500">{negociosGanhos}</span>
+                <span className="text-lg md:text-2xl font-bold text-foreground">{negociosGanhos}</span>
                 <span className="text-xs md:text-sm text-muted-foreground ml-1">negócios</span>
+              </div>
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-accent/15 rounded-lg flex items-center justify-center">
+                <Star size={16} className="text-accent md:text-[20px]" />
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Negócios Ganhos</h3>
-            <p className="text-[10px] md:text-xs text-muted-foreground mt-1 md:mt-1">Conversões realizadas</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-1">Conversões realizadas</p>
           </div>
 
           {/* Total de Disparos */}
-          <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg md:rounded-xl p-3 md:p-4">
-            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
-                <MessageCircle size={16} className="text-orange-500 md:text-[20px]" />
-              </div>
+          <div className="bg-card border border-border rounded-lg md:rounded-xl p-3 md:p-4 hover:border-accent/40 transition-all shadow-sm">
+            <div className="flex items-center justify-between mb-2">
               <div>
-                <span className="text-lg md:text-2xl font-bold text-orange-500">{totalDisparos}</span>
+                <span className="text-lg md:text-2xl font-bold text-foreground">{totalDisparos}</span>
                 <span className="text-xs md:text-sm text-muted-foreground ml-1">disparos</span>
+              </div>
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-accent/15 rounded-lg flex items-center justify-center">
+                <MessageCircle size={16} className="text-accent md:text-[20px]" />
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Total de Disparos</h3>
-            <p className="text-[10px] md:text-xs text-muted-foreground mt-1 md:mt-1">Mensagens enviadas</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-1">Mensagens enviadas</p>
           </div>
         </div>
+
+        {/* Card do Plano Gratuito */}
+
 
         {/* Ações Rápidas - Mobile Primeiro */}
         <div className="mb-4 md:mb-6">

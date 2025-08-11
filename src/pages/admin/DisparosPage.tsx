@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -6,6 +6,7 @@ import {
   MessageCircle,
   Play,
   ChevronRight,
+  ChevronLeft,
   Building,
   Phone,
   Globe,
@@ -19,12 +20,15 @@ import {
   BarChart3,
   Target,
   CheckCircle,
-  Clock
+  Clock,
+  AlertCircle,
+  ExternalLink
 } from '../../utils/icons';
 import { templateService, MessageTemplate } from '../../services/templateService';
 import { substituirVariaveis } from '../../utils/variables';
 import { supabase } from '../../lib/supabase';
 import { useFiltros } from '../../contexts/FiltrosContext';
+import { usePlanLimits } from '../../contexts/PlanLimitsContext';
 import PageHeader from '../../components/ui/PageHeader';
 import LoadingScreen from '../../components/ui/LoadingScreen';
 
@@ -92,6 +96,7 @@ const DisparosPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { filtrosAtivos } = useFiltros();
+  const { canPerformAction, getRemainingLimit, setShowUpgradeModal, setUpgradeReason, refreshLimits } = usePlanLimits();
   
   const [modalidades, setModalidades] = useState<string[]>([]);
   const [modalidadeSelecionada, setModalidadeSelecionada] = useState<string | null>(null);
@@ -133,9 +138,11 @@ const DisparosPage: React.FC = () => {
   const [selectedFluxo, setSelectedFluxo] = useState<string | null>(null);
   const [customMessage, setCustomMessage] = useState('');
   const [messageType, setMessageType] = useState<'template' | 'fluxo' | 'custom'>('custom');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [delay, setDelay] = useState(30);
   const [isLaunching, setIsLaunching] = useState(false);
   const [empresaVindaDoKanban, setEmpresaVindaDoKanban] = useState<any>(null);
+  const [empresaPreSelecionada, setEmpresaPreSelecionada] = useState<any>(null);
   const [showDispatchAnimation, setShowDispatchAnimation] = useState(false);
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
   const [dispatchStats, setDispatchStats] = useState<{
@@ -145,6 +152,15 @@ const DisparosPage: React.FC = () => {
     delaySegundos: number;
     tempoEstimado: string;
   } | null>(null);
+  
+  // Modal de informações da empresa
+  const [showEmpresaDetails, setShowEmpresaDetails] = useState(false);
+  const [empresaSelecionadaDetalhes, setEmpresaSelecionadaDetalhes] = useState<any>(null);
+  
+  // Modal de salvar template
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [saveTemplateSuccess, setSaveTemplateSuccess] = useState(false);
 
   // Efeito para controlar o scroll e barra de navegação quando o modal está aberto
   useEffect(() => {
@@ -229,6 +245,33 @@ const DisparosPage: React.FC = () => {
       setTimeout(() => {
         setSelecionadas([empresa.id]);
       }, 1000);
+    }
+
+    // Verificar se há empresa pré-selecionada vinda da aba empresas
+    if (locationState?.empresaPreSelecionada) {
+      const empresa = locationState.empresaPreSelecionada;
+      
+      // Salvar empresa para mostrar visual feedback
+      setEmpresaPreSelecionada(empresa);
+      
+      // Definir modalidade como "todas" para mostrar todas as empresas
+      setModalidadeSelecionada('todas');
+      
+      // Aguardar um pouco para os dados carregarem e então pré-selecionar a empresa
+      setTimeout(() => {
+        setSelecionadas([empresa.id]);
+        // Automaticamente selecionar o segmento correto baseado no status da empresa
+        const segmentoCorreto: KanbanSegment = {
+          id: empresa.status || 'a_contatar',
+          title: empresa.status === 'contato_realizado' ? 'Follow-up' : 
+                 empresa.status === 'em_negociacao' ? 'Em Negociação' : 'A Contatar',
+          status: empresa.status || 'a_contatar',
+          count: 1,
+          description: 'Segmento da empresa pré-selecionada'
+        };
+        setSelectedSegment(segmentoCorreto);
+        // NÃO abrir automaticamente o modal - deixar na tela de seleção
+      }, 1500);
     }
 
     // Cleanup: garantir que a barra de navegação e scroll sejam restaurados ao desmontar
@@ -470,8 +513,10 @@ const DisparosPage: React.FC = () => {
       if (empresas) {
         const empresasFiltradas = aplicarFiltros(empresas);
         setEmpresasSegmento(empresasFiltradas);
-        // Pré-selecionar todas as empresas por padrão
-        setSelecionadas(empresasFiltradas.map(e => e.id));
+        // Pré-selecionar todas as empresas por padrão, EXCETO se há empresa pré-selecionada
+        if (!empresaPreSelecionada) {
+          setSelecionadas(empresasFiltradas.map(e => e.id));
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar empresas do segmento:', error);
@@ -486,6 +531,61 @@ const DisparosPage: React.FC = () => {
         return [...prev, id];
     }
     });
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!templateName.trim()) return;
+    
+    // Verificar limites do plano
+    if (!(await canPerformAction('criar_template', 1))) {
+              setUpgradeReason('Limite de templates atingido (1 máximo). Fale no WhatsApp para fazer upgrade com desconto exclusivo!');
+      setShowUpgradeModal(true);
+      setShowSaveTemplateModal(false);
+      return;
+    }
+    
+    try {
+      const result = await templateService.createTemplate({
+        name: templateName.trim(),
+        content: customMessage.trim(),
+        preview: customMessage.trim().substring(0, 100) + (customMessage.trim().length > 100 ? '...' : '')
+      });
+      
+      if (result.success) {
+        const templatesResult = await templateService.listTemplates();
+        if (templatesResult.success && templatesResult.data) {
+          setTemplates(templatesResult.data);
+        }
+        
+        // Atualizar limites após salvar template com sucesso
+        await refreshLimits();
+        
+        // Mostrar feedback de sucesso
+        setSaveTemplateSuccess(true);
+        setTimeout(() => {
+          setShowSaveTemplateModal(false);
+          setTemplateName('');
+          setSaveTemplateSuccess(false);
+        }, 1500);
+      } else {
+        console.error('Erro ao salvar template:', result.error);
+      }
+    } catch (error) {
+      console.error('Erro ao salvar template:', error);
+    }
+  };
+
+  // Função unificada de navegação
+  const handleGoBack = () => {
+    if (selectedSegment) {
+      // Se tem segmento selecionado, volta para lista de segmentos
+      setSelectedSegment(null);
+    } else {
+      // Se não tem segmento, volta para seleção de modalidades
+      setModalidadeSelecionada(null);
+      setSelectedSegment(null);
+      limparFiltros();
+    }
   };
 
   // Função para gerar nome da campanha automaticamente
@@ -563,6 +663,28 @@ const DisparosPage: React.FC = () => {
     if (messageType === 'custom' && !customMessage.trim()) return;
     if (messageType === 'template' && !selectedTemplate) return;
     if (messageType === 'fluxo' && !selectedFluxo) return;
+
+    // Verificar limites do plano
+    const remainingDisparos = getRemainingLimit('disparos');
+    const quantidadeDisparos = selecionadas.length;
+    
+    if (!(await canPerformAction('fazer_disparo', quantidadeDisparos))) {
+      if (remainingDisparos === 0) {
+        setUpgradeReason('Limite de disparos atingido. Fale no WhatsApp para fazer upgrade com desconto exclusivo!');
+        setShowUpgradeModal(true);
+        return;
+      } else {
+        // Mostrar modal explicando que foi limitado
+                  setUpgradeReason(`Campanha limitada a ${remainingDisparos} empresas. Fale no WhatsApp para fazer upgrade com desconto exclusivo!`);
+        
+        // Reduzir selecionadas para o limite permitido
+        const empresasLimitadas = selecionadas.slice(0, remainingDisparos);
+        setSelecionadas(empresasLimitadas);
+        
+        // Mostrar modal de upgrade
+        setTimeout(() => setShowUpgradeModal(true), 1000);
+      }
+    }
     
     setIsLaunching(true);
     
@@ -733,6 +855,9 @@ const DisparosPage: React.FC = () => {
             delaySegundos: delay,
             tempoEstimado: tempoEstimado
           });
+          
+          // Atualizar limites após disparo bem-sucedido
+          await refreshLimits();
         } else {
           throw new Error('Erro ao agendar disparos');
         }
@@ -773,6 +898,25 @@ const DisparosPage: React.FC = () => {
       quantidadeAvaliacoesMax: 1000,
       cidadesSelecionadas: []
     }));
+  };
+
+  // Funções para o modal de informações da empresa
+  const handleShowEmpresaInfo = (empresa: any) => {
+    setEmpresaSelecionadaDetalhes(empresa);
+    setShowEmpresaDetails(true);
+  };
+
+  const handleCloseEmpresaDetails = () => {
+    setShowEmpresaDetails(false);
+    setEmpresaSelecionadaDetalhes(null);
+  };
+
+  const handleVisitWebsite = (url: string) => {
+    // Garantir que a URL tenha protocolo
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   if (isLoading) {
@@ -1090,29 +1234,25 @@ const DisparosPage: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Navegação Simplificada - Sem Redundância */}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+              {/* Header Unificado com Navegação */}
+              <div className="flex items-center gap-2 mb-4">
                 <button
-                  onClick={() => {
-                    setModalidadeSelecionada(null);
-                    setSelectedSegment(null);
-                    limparFiltros();
-                  }}
-                  className="hover:text-foreground transition-colors"
+                  onClick={handleGoBack}
+                  className="p-1.5 hover:bg-muted/50 rounded-lg transition-colors text-muted-foreground hover:text-foreground"
                 >
-                  ← Voltar
+                  <ChevronLeft size={16} />
                 </button>
-                <span className="text-foreground font-medium">
-                  {modalidadeSelecionada === 'todas' ? 'Todas as Empresas' : modalidadeSelecionada}
-                </span>
+                <div className="flex-1">
+                  <h2 className="text-base font-medium text-foreground">
+                    {selectedSegment ? selectedSegment.title : 
+                     `${modalidadeSelecionada === 'todas' ? 'Todas as Empresas' : modalidadeSelecionada} - Selecione o segmento`}
+                  </h2>
+                </div>
               </div>
 
               {/* Segmentos do Kanban */}
               {!selectedSegment ? (
                 <div className="space-y-3">
-                  <h2 className="text-lg font-semibold text-foreground">
-                    Selecione o segmento
-                  </h2>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {kanbanSegments.map((segment) => (
@@ -1135,62 +1275,66 @@ const DisparosPage: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  {/* Navegação Detalhada Simplificada */}
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                    <button
-                      onClick={() => {
-                        setModalidadeSelecionada(null);
-                        setSelectedSegment(null);
-                      }}
-                      className="hover:text-foreground transition-colors"
-                    >
-                      ← Voltar
-                    </button>
-                    <span className="text-foreground font-medium">{selectedSegment.title}</span>
-                  </div>
-
                   {/* Lista de Empresas com Controles */}
                   <div className="space-y-4">
                     <div className="space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <h2 className="text-lg font-semibold text-foreground">
-                          Empresas - {selectedSegment.title} ({empresasSegmento.length})
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+                        <h2 className="text-base sm:text-lg font-medium text-foreground">
+                          {selectedSegment.title} ({empresasSegmento.length})
                         </h2>
-                        <p className="text-xs text-muted-foreground">
-                          Mostrando apenas empresas com WhatsApp ativo para disparo
-                        </p>
                         
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => setSelecionadas(empresasSegmento.map(e => e.id))}
                             disabled={selecionadas.length === empresasSegmento.length}
-                            className="px-3 py-1.5 text-xs bg-accent/10 text-accent hover:bg-accent/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-2.5 py-1 text-xs bg-accent/10 text-accent hover:bg-accent/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            Selecionar todas
+                            Todas
                           </button>
                           <button
                             onClick={() => setSelecionadas([])}
                             disabled={selecionadas.length === 0}
-                            className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            Limpar seleção
+                            Limpar
                           </button>
                         </div>
                       </div>
                       
-                      {/* Status da Seleção e Botão de Disparo */}
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-muted/20 rounded-xl border border-border">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-accent rounded-full animate-pulse"></div>
-                          <span className="text-sm text-foreground font-medium">
-                            {selecionadas.length === empresasSegmento.length && empresasSegmento.length > 0
-                              ? `Todas as ${empresasSegmento.length} empresas selecionadas`
-                              : selecionadas.length === 0
-                              ? 'Nenhuma empresa selecionada'
-                              : `${selecionadas.length} de ${empresasSegmento.length} empresas selecionadas`
-                            }
-                          </span>
-                        </div>
+                      {/* Banner de Empresa Pré-Selecionada - Compacto */}
+                      {empresaPreSelecionada && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="p-3 bg-gradient-to-r from-accent/10 to-accent/5 border border-accent/20 rounded-lg"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-accent/20 rounded-lg flex items-center justify-center">
+                              <Building size={12} className="text-accent" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-foreground">
+                                🎯 {empresaPreSelecionada.empresa_nome} pré-selecionada
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => setEmpresaPreSelecionada(null)}
+                              className="p-1 text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {/* Status da Seleção e Botão de Disparo - Compacto */}
+                      <div className="flex items-center justify-between gap-2 p-3 bg-muted/20 rounded-lg border border-border">
+                        <span className="text-sm text-foreground">
+                          {selecionadas.length === 0
+                            ? 'Nenhuma selecionada'
+                            : `${selecionadas.length} selecionadas`
+                          }
+                        </span>
 
                         {selecionadas.length > 0 && (
                           <button
@@ -1198,10 +1342,10 @@ const DisparosPage: React.FC = () => {
                   resetWizard();
                   setShowDisparoConfig(true);
                 }}
-                            className="px-6 py-2.5 bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl transition-colors flex items-center gap-2 text-sm font-medium shadow-sm"
+                            className="px-4 py-2 bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg transition-colors flex items-center gap-1.5 text-sm font-medium"
                           >
-                            <Play size={16} />
-                            Iniciar Disparo ({selecionadas.length})
+                            <Play size={14} />
+                            Disparar ({selecionadas.length})
                           </button>
                         )}
                       </div>
@@ -1221,10 +1365,9 @@ const DisparosPage: React.FC = () => {
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {empresasSegmento.map((empresa) => (
-                          <button 
+                          <div 
                             key={empresa.id}
-                            onClick={() => toggleSelecionada(empresa.id)}
-                            className={`bg-background border-2 rounded-xl p-4 text-left transition-all ${
+                            className={`bg-background border-2 rounded-xl p-4 transition-all ${
                               selecionadas.includes(empresa.id)
                                 ? 'border-accent bg-accent/5'
                                 : 'border-border hover:border-accent/40'
@@ -1239,11 +1382,32 @@ const DisparosPage: React.FC = () => {
                                   <p className="text-xs text-muted-foreground">{empresa.categoria}</p>
                                 )}
                               </div>
-                              {selecionadas.includes(empresa.id) && (
-                                <div className="flex-shrink-0 w-5 h-5 bg-accent rounded-full flex items-center justify-center">
-                                  <Check size={12} className="text-accent-foreground" />
-                                </div>
-                              )}
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {/* Botão de informações */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleShowEmpresaInfo(empresa);
+                                  }}
+                                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+                                  title="Ver informações da empresa"
+                                >
+                                  <AlertCircle size={14} />
+                                </button>
+                                {/* Checkbox de seleção */}
+                                <button
+                                  onClick={() => toggleSelecionada(empresa.id)}
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+                                    selecionadas.includes(empresa.id)
+                                      ? 'bg-accent text-accent-foreground'
+                                      : 'border-2 border-border hover:border-accent'
+                                  }`}
+                                >
+                                  {selecionadas.includes(empresa.id) && (
+                                    <Check size={12} />
+                                  )}
+                                </button>
+                              </div>
                             </div>
                             
                             <div className="space-y-2">
@@ -1277,7 +1441,7 @@ const DisparosPage: React.FC = () => {
                                 </p>
                               )}
                             </div>
-                          </button>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -1292,14 +1456,13 @@ const DisparosPage: React.FC = () => {
         {showDisparoConfig && (
           <div 
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4"
-            onClick={() => setShowDisparoConfig(false)}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.2 }}
-              className="bg-background border border-border rounded-xl w-full max-w-lg max-h-[90vh] flex flex-col"
+              className="bg-background border border-border rounded-xl w-full max-w-sm md:max-w-lg max-h-[95vh] md:max-h-[90vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header com Progress - Compacto Mobile */}
@@ -1429,24 +1592,24 @@ const DisparosPage: React.FC = () => {
                 {/* Etapa 2: Mensagem */}
                 {currentStep === 2 && (
                   <div className="space-y-3">
-                    <div className="text-center mb-4">
-                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <MessageCircle size={20} className="sm:w-6 sm:h-6 text-blue-500" />
+                    <div className="text-center mb-2 sm:mb-4">
+                      <div className="w-8 h-8 sm:w-12 sm:h-12 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-1 sm:mb-2">
+                        <MessageCircle size={16} className="sm:w-5 sm:h-5 text-blue-500" />
                       </div>
-                      <h3 className="text-base sm:text-lg font-semibold text-foreground mb-1">
+                      <h3 className="text-sm sm:text-base font-medium text-foreground mb-0.5 sm:mb-1">
                         Configure sua Mensagem
                       </h3>
-                      <p className="text-xs sm:text-sm text-muted-foreground">
+                      <p className="text-xs text-muted-foreground hidden sm:block">
                         Escreva a mensagem para as empresas
                       </p>
                     </div>
 
                     {/* Tipo de Mensagem */}
                     <div>
-                      <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
+                      <label className="block text-xs font-medium text-foreground mb-1">
                         Tipo de Mensagem
                       </label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                         <button
                           type="button"
                           onClick={() => {
@@ -1454,7 +1617,7 @@ const DisparosPage: React.FC = () => {
                             setSelectedTemplate(null);
                             setSelectedFluxo(null);
                           }}
-                          className={`px-3 py-2 text-xs rounded-lg border transition-all ${
+                          className={`px-2 py-1.5 sm:px-3 sm:py-2 text-xs rounded-lg border transition-all ${
                             messageType === 'custom'
                               ? 'bg-accent text-accent-foreground border-accent'
                               : 'bg-background text-foreground border-border hover:border-accent/60'
@@ -1468,7 +1631,7 @@ const DisparosPage: React.FC = () => {
                             setMessageType('template');
                             setSelectedFluxo(null);
                           }}
-                          className={`px-3 py-2 text-xs rounded-lg border transition-all ${
+                          className={`px-2 py-1.5 sm:px-3 sm:py-2 text-xs rounded-lg border transition-all ${
                             messageType === 'template'
                               ? 'bg-accent text-accent-foreground border-accent'
                               : 'bg-background text-foreground border-border hover:border-accent/60'
@@ -1482,7 +1645,7 @@ const DisparosPage: React.FC = () => {
                             setMessageType('fluxo');
                             setSelectedTemplate(null);
                           }}
-                          className={`px-3 py-2 text-xs rounded-lg border transition-all ${
+                          className={`px-2 py-1.5 sm:px-3 sm:py-2 text-xs rounded-lg border transition-all ${
                             messageType === 'fluxo'
                               ? 'bg-accent text-accent-foreground border-accent'
                               : 'bg-background text-foreground border-border hover:border-accent/60'
@@ -1590,8 +1753,56 @@ const DisparosPage: React.FC = () => {
                       <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
                         {messageType === 'custom' ? 'Mensagem' : 'Conteúdo'} <span className="text-red-500">*</span>
                       </label>
+                      
+                      {/* Variáveis Disponíveis - Para todos os tipos de mensagem */}
+                      {(messageType === 'custom' || (messageType === 'template' && customMessage) || (messageType === 'fluxo' && selectedFluxo)) && (
+                        <div className="mb-3">
+                          <p className="text-xs text-muted-foreground mb-2">
+                            {messageType === 'custom' 
+                              ? 'Clique para adicionar variáveis:' 
+                              : 'Variáveis disponíveis (clique para adicionar):'}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { name: 'Nome da Empresa', value: '{{empresa_nome}}' },
+                              { name: 'Telefone', value: '{{empresa_telefone}}' },
+                              { name: 'Endereço', value: '{{empresa_endereco}}' },
+                              { name: 'Website', value: '{{empresa_website}}' },
+                              { name: 'Categoria', value: '{{empresa_categoria}}' }
+                            ].map((variable) => (
+                              <button
+                                key={variable.value}
+                                type="button"
+                                onClick={() => {
+                                  const textarea = textareaRef.current;
+                                  if (textarea && messageType === 'custom') {
+                                    const cursorPos = textarea.selectionStart || customMessage.length;
+                                    const newMessage = customMessage.slice(0, cursorPos) + variable.value + customMessage.slice(cursorPos);
+                                    setCustomMessage(newMessage);
+                                    
+                                    // Restaurar cursor após inserção
+                                    setTimeout(() => {
+                                      textarea.focus();
+                                      const newCursorPos = cursorPos + variable.value.length;
+                                      textarea.setSelectionRange(newCursorPos, newCursorPos);
+                                    }, 10);
+                                  } else {
+                                    // Para templates e fluxos, adicionar no final
+                                    setCustomMessage(prev => prev + ' ' + variable.value);
+                                  }
+                                }}
+                                className="px-2 py-1 text-xs bg-accent/10 text-accent hover:bg-accent/20 rounded-md transition-colors border border-accent/20 font-medium"
+                              >
+                                {variable.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
                       <div className="relative">
                         <textarea
+                          ref={textareaRef}
                           value={customMessage}
                           onChange={(e) => setCustomMessage(e.target.value)}
                           placeholder={
@@ -1602,53 +1813,32 @@ const DisparosPage: React.FC = () => {
                                 : "Selecione um fluxo acima..."
                           }
                           disabled={messageType !== 'custom'}
-                          className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 resize-none transition-all duration-200 ${
+                          className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 resize-none transition-all duration-200 ${
                             messageType !== 'custom' ? 'opacity-60 cursor-not-allowed' : ''
                           }`}
-                          rows={3}
-                          style={{ minHeight: '80px' }}
+                          rows={2}
+                          style={{ minHeight: '60px' }}
                         />
                       </div>
-                      <div className="flex justify-between items-center mt-1.5">
-                        <div className="flex items-center gap-2">
+                      <div className="flex justify-between items-center mt-1">
+                        <div className="flex items-center gap-1.5">
                           <span className="text-xs text-muted-foreground">
-                            {customMessage.length} chars
+                            {customMessage.length}
                           </span>
                           {messageType === 'custom' && !customMessage.trim() && (
                             <span className="text-xs text-red-500 font-medium">Obrigatório</span>
                           )}
                         </div>
                         
-                        {/* Botão Salvar Template - Intuitivo */}
+                        {/* Botão Salvar Template - Compacto */}
                         {messageType === 'custom' && customMessage.trim() && (
                           <button
-                            onClick={async () => {
-                              const templateName = prompt('Nome do template:');
-                              if (templateName && templateName.trim()) {
-                                try {
-                                  const result = await templateService.createTemplate({
-                                    name: templateName.trim(),
-                                    content: customMessage.trim(),
-                                    preview: customMessage.trim().substring(0, 100) + (customMessage.trim().length > 100 ? '...' : '')
-                                  });
-                                  if (result.success) {
-                                    const templatesResult = await templateService.listTemplates();
-                                    if (templatesResult.success && templatesResult.data) {
-                                      setTemplates(templatesResult.data);
-                                    }
-                                    alert('Template salvo!');
-                                  } else {
-                                    alert('Erro: ' + result.error);
-                                  }
-                                } catch (error) {
-                                  alert('Erro ao salvar');
-                                }
-                              }
-                            }}
-                            className="px-2.5 py-1.5 text-xs bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 rounded-lg transition-colors font-medium flex items-center gap-1.5 border border-blue-500/20"
+                            onClick={() => setShowSaveTemplateModal(true)}
+                            className="px-2 py-1 sm:px-3 sm:py-2 text-xs bg-gradient-to-r from-purple-500/10 to-purple-600/10 text-purple-600 hover:from-purple-500/20 hover:to-purple-600/20 rounded-lg transition-all duration-200 font-medium flex items-center gap-1 sm:gap-2 border border-purple-500/30 hover:border-purple-600/40 shadow-sm hover:shadow-md"
                           >
-                            <span className="text-sm">📝</span>
-                            <span>Salvar Template</span>
+                            <span className="text-xs sm:text-sm">💾</span>
+                            <span className="hidden sm:inline">Salvar como Template</span>
+                            <span className="sm:hidden">Salvar</span>
                           </button>
                         )}
                       </div>
@@ -1656,21 +1846,32 @@ const DisparosPage: React.FC = () => {
 
                     {/* Delay entre Mensagens */}
                     <div>
-                      <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
-                        Delay entre mensagens (segundos) <span className="text-red-500">*</span>
+                      <label className="block text-xs font-medium text-foreground mb-2">
+                        Delay entre mensagens <span className="text-red-500">*</span>
                       </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          value={delay}
-                          onChange={(e) => setDelay(Math.max(1, parseInt(e.target.value) || 30))}
-                          min="1"
-                          max="300"
-                          className="w-full px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200"
-                          placeholder="30"
-                        />
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                          { value: 30, label: '30s', desc: '30 segundos' },
+                          { value: 60, label: '60s', desc: '1 minuto' },
+                          { value: 90, label: '90s', desc: '1.5 minutos' },
+                          { value: 180, label: '180s', desc: '3 minutos' }
+                        ].map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setDelay(option.value)}
+                            className={`px-3 py-2 text-xs sm:text-sm rounded-lg border transition-all ${
+                              delay === option.value
+                                ? 'bg-accent text-accent-foreground border-accent'
+                                : 'bg-background text-foreground border-border hover:border-accent/60 hover:bg-accent/5'
+                            }`}
+                          >
+                            <div className="font-medium">{option.label}</div>
+                            <div className="text-xs opacity-75 hidden sm:block">{option.desc}</div>
+                          </button>
+                        ))}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-xs text-muted-foreground mt-2 hidden sm:block">
                         Tempo de espera entre cada mensagem (recomendado: 30-60s)
                       </p>
                     </div>
@@ -1938,6 +2139,242 @@ const DisparosPage: React.FC = () => {
                   <span className="sm:hidden">Histórico</span>
                 </button>
               </motion.div>
+            </motion.div>
+          </div>
+        )}
+        
+        {/* Modal de Informações da Empresa */}
+        {showEmpresaDetails && empresaSelecionadaDetalhes && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="bg-background border border-border rounded-xl w-full max-w-md max-h-[80vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-border bg-muted/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-accent/20 rounded-lg flex items-center justify-center">
+                      <Building size={16} className="text-accent" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-foreground">Informações da Empresa</h3>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleCloseEmpresaDetails}
+                    className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+                {/* Nome da empresa */}
+                <div className="bg-muted/20 border border-border rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-accent rounded-full flex-shrink-0"></div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground font-medium">Nome da Empresa</p>
+                      <p className="text-sm text-foreground font-medium">{empresaSelecionadaDetalhes.empresa_nome}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Badges de avaliação e posição */}
+                {(empresaSelecionadaDetalhes.posicao || empresaSelecionadaDetalhes.avaliacao) && (
+                  <div className="flex flex-wrap gap-2">
+                    {empresaSelecionadaDetalhes.posicao && (
+                      <div className="bg-muted/20 px-2 py-1 rounded-md border border-border">
+                        <span className="text-xs text-foreground font-medium">Posição #{empresaSelecionadaDetalhes.posicao} no Google</span>
+                      </div>
+                    )}
+                    {empresaSelecionadaDetalhes.avaliacao && (
+                      <div className="flex items-center gap-1 bg-muted/20 px-2 py-1 rounded-md border border-border">
+                        <Star size={12} className="text-yellow-400 fill-yellow-400" />
+                        <span className="text-xs text-foreground font-medium">
+                          {empresaSelecionadaDetalhes.avaliacao} ({empresaSelecionadaDetalhes.total_avaliacoes || 0} avaliações)
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Website */}
+                {empresaSelecionadaDetalhes.website ? (
+                  <button 
+                    onClick={() => handleVisitWebsite(empresaSelecionadaDetalhes.website)}
+                    className="w-full text-left p-3 bg-muted/20 hover:bg-accent/5 border border-border rounded-lg transition-colors group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ExternalLink size={16} className="text-accent flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-foreground font-medium truncate">
+                          Visitar Website
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">{empresaSelecionadaDetalhes.website}</p>
+                      </div>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="w-full p-3 bg-muted/20 border border-border rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <ExternalLink size={16} className="text-muted-foreground flex-shrink-0" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Website não disponível</p>
+                        <p className="text-xs text-muted-foreground/70">Empresa sem site cadastrado</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Informações adicionais */}
+                <div className="space-y-3">
+                  {empresaSelecionadaDetalhes.categoria && (
+                    <div className="bg-muted/20 border border-border rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-accent rounded-full flex-shrink-0"></div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-muted-foreground font-medium">Categoria</p>
+                          <p className="text-sm text-foreground font-medium">{empresaSelecionadaDetalhes.categoria}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {empresaSelecionadaDetalhes.endereco && (
+                    <div className="bg-muted/20 border border-border rounded-lg p-3">
+                      <div className="flex items-start gap-2">
+                        <div className="w-2 h-2 bg-accent rounded-full mt-1.5 flex-shrink-0"></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-muted-foreground font-medium">Localização</p>
+                          <p className="text-sm text-foreground font-medium leading-relaxed">{empresaSelecionadaDetalhes.endereco}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {empresaSelecionadaDetalhes.telefone && (
+                    <div className="bg-muted/20 border border-border rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-muted-foreground font-medium">WhatsApp</p>
+                          <p className="text-sm text-foreground font-medium">{empresaSelecionadaDetalhes.telefone}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal de Salvar Template */}
+        {showSaveTemplateModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="bg-background border border-border rounded-xl w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                      <span className="text-sm">💾</span>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-foreground">Salvar Template</h3>
+                      <p className="text-xs text-muted-foreground">Dê um nome para seu template</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowSaveTemplateModal(false);
+                      setTemplateName('');
+                    }}
+                    className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-4 space-y-4">
+                {saveTemplateSuccess ? (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-2xl">✅</span>
+                    </div>
+                    <h3 className="text-lg font-medium text-foreground mb-1">Template Salvo!</h3>
+                    <p className="text-sm text-muted-foreground">
+                      "{templateName}" foi salvo com sucesso
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Nome do Template <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={templateName}
+                        onChange={(e) => setTemplateName(e.target.value)}
+                        placeholder="Ex: Apresentação da empresa"
+                        className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                        autoFocus
+                      />
+                    </div>
+
+                    {/* Preview da mensagem */}
+                    <div className="bg-muted/20 border border-border rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground font-medium mb-2">Preview da mensagem:</p>
+                      <p className="text-xs text-foreground leading-relaxed">
+                        {customMessage.length > 150 
+                          ? customMessage.substring(0, 150) + '...' 
+                          : customMessage
+                        }
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Footer */}
+              {!saveTemplateSuccess && (
+                <div className="p-4 border-t border-border flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowSaveTemplateModal(false);
+                      setTemplateName('');
+                    }}
+                    className="flex-1 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/20 rounded-lg transition-colors font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveTemplate}
+                    disabled={!templateName.trim()}
+                    className="flex-1 px-3 py-2 text-sm bg-purple-500 hover:bg-purple-600 disabled:bg-muted disabled:text-muted-foreground text-white rounded-lg transition-colors font-medium disabled:cursor-not-allowed"
+                  >
+                    Salvar Template
+                  </button>
+                </div>
+              )}
             </motion.div>
           </div>
         )}

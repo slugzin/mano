@@ -20,8 +20,10 @@ import { whatsappService, WhatsAppInstance } from '../../services/whatsappServic
 import PageHeader from '../../components/ui/PageHeader';
 import { supabase } from '../../lib/supabase';
 import LoadingScreen from '../../components/ui/LoadingScreen';
+import { usePlanLimits } from '../../contexts/PlanLimitsContext';
 
 const ConexoesPage: React.FC = () => {
+  const { canPerformAction, getRemainingLimit, setShowUpgradeModal, setUpgradeReason, refreshLimits } = usePlanLimits();
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -195,12 +197,22 @@ const ConexoesPage: React.FC = () => {
   const createInstance = async () => {
     if (!newInstanceName.trim()) return;
     
+    // Verificar limites do plano
+    if (!(await canPerformAction('criar_conexao', 1))) {
+              setUpgradeReason('Limite de conexões atingido (1 máximo). Fale no WhatsApp para fazer upgrade com desconto exclusivo!');
+      setShowUpgradeModal(true);
+      return;
+    }
+    
     setIsLoading(true);
     
     const result = await whatsappService.createInstance(newInstanceName);
     
     if (result.success && result.data) {
       await loadInstances();
+      
+      // Atualizar limites após criação bem-sucedida
+      await refreshLimits();
       
       // Fechar modal de criação
       setShowCreateModal(false);
@@ -367,7 +379,7 @@ const ConexoesPage: React.FC = () => {
         {/* Desktop Card */}
         <div className={`hidden md:block relative border rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.02] ${
           isConnected 
-            ? 'bg-emerald-500/10 border-emerald-500/30' 
+            ? 'bg-card border-accent/40' 
             : 'bg-card border-border hover:border-accent/30'
         }`}>
           
@@ -377,7 +389,7 @@ const ConexoesPage: React.FC = () => {
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 {/* Avatar */}
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden ${
-                  isConnected ? 'bg-emerald-500' : 'bg-muted'
+                  isConnected ? 'bg-accent' : 'bg-muted'
                 }`}>
                   {instance.profilePicUrl ? (
                     <img 
@@ -406,10 +418,10 @@ const ConexoesPage: React.FC = () => {
                     </div>
                   )}
                   <div className={`text-xs flex items-center gap-1 mt-1 ${
-                    isConnected ? 'text-emerald-600' : 'text-muted-foreground'
+                    isConnected ? 'text-accent' : 'text-muted-foreground'
                   }`}>
                     <div className={`w-2 h-2 rounded-full ${
-                      isConnected ? 'bg-emerald-500' : 'bg-red-500'
+                      isConnected ? 'bg-accent' : 'bg-muted-foreground'
                     }`} />
                     {isConnected ? 'Conectado' : 'Desconectado'}
                   </div>
@@ -461,14 +473,14 @@ const ConexoesPage: React.FC = () => {
         {/* Mobile Compact Card */}
         <div className={`md:hidden bg-card border border-border rounded-lg p-3 transition-all duration-200 ${
           isConnected 
-            ? 'border-emerald-500/30 bg-emerald-500/5' 
+            ? 'border-accent/40 bg-accent/5' 
             : 'border-border'
         }`}>
           
           <div className="flex items-center gap-2">
             {/* Avatar */}
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 ${
-              isConnected ? 'bg-emerald-500' : 'bg-muted'
+              isConnected ? 'bg-accent' : 'bg-muted'
             }`}>
               {instance.profilePicUrl ? (
                 <img 
@@ -493,11 +505,11 @@ const ConexoesPage: React.FC = () => {
                   {instance.name}
                 </h3>
                 <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                  isConnected ? 'bg-emerald-500' : 'bg-red-500'
+                  isConnected ? 'bg-accent' : 'bg-muted-foreground'
                 }`} />
               </div>
               <div className={`text-xs flex items-center gap-1 ${
-                isConnected ? 'text-emerald-600 font-medium' : 'text-muted-foreground'
+                isConnected ? 'text-accent font-medium' : 'text-muted-foreground'
               }`}>
                 {isConnected ? '✓ Conectado' : '● Desconectado'}
               </div>
@@ -591,51 +603,51 @@ const ConexoesPage: React.FC = () => {
           />
         </div>
 
-        {/* KPIs Desktop */}
-        <div className="hidden md:grid grid-cols-3 gap-3 mb-6">
+        {/* KPIs Desktop - Minimalista */}
+        <div className="hidden md:grid grid-cols-3 gap-4 mb-6">
           {/* Total de Conexões */}
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                <Phone size={20} className="text-emerald-500" />
-              </div>
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border rounded-xl p-4 hover:border-accent/40 transition-all shadow-sm">
+            <div className="flex items-center justify-between mb-2">
               <div>
-                <span className="text-2xl font-bold text-emerald-500">{instances.length}</span>
-                <span className="text-xs text-muted-foreground ml-2">total</span>
+                <span className="text-2xl font-semibold text-gray-900 dark:text-foreground">{instances.length}</span>
+                <span className="text-xs text-gray-600 dark:text-muted-foreground ml-2">total</span>
+              </div>
+              <div className="w-10 h-10 bg-accent/15 dark:bg-accent/10 rounded-lg flex items-center justify-center">
+                <Phone size={20} className="text-accent" />
               </div>
             </div>
-            <h3 className="text-sm font-medium text-foreground">Total de Conexões</h3>
-            <p className="text-xs text-muted-foreground mt-1">Contas configuradas</p>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-foreground">Total de Conexões</h3>
+            <p className="text-xs text-gray-600 dark:text-muted-foreground mt-1">Contas configuradas</p>
           </div>
 
           {/* Conectadas */}
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                <CheckCircle size={20} className="text-blue-500" />
-              </div>
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border rounded-xl p-4 hover:border-accent/40 transition-all shadow-sm">
+            <div className="flex items-center justify-between mb-2">
               <div>
-                <span className="text-2xl font-bold text-blue-500">{connectedInstances.length}</span>
-                <span className="text-xs text-muted-foreground ml-2">ativas</span>
+                <span className="text-2xl font-semibold text-gray-900 dark:text-foreground">{connectedInstances.length}</span>
+                <span className="text-xs text-gray-600 dark:text-muted-foreground ml-2">ativas</span>
+              </div>
+              <div className="w-10 h-10 bg-accent/15 dark:bg-accent/10 rounded-lg flex items-center justify-center">
+                <CheckCircle size={20} className="text-accent" />
               </div>
             </div>
-            <h3 className="text-sm font-medium text-foreground">Conectadas</h3>
-            <p className="text-xs text-muted-foreground mt-1">Contas ativas</p>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-foreground">Conectadas</h3>
+            <p className="text-xs text-gray-600 dark:text-muted-foreground mt-1">Contas ativas</p>
           </div>
 
           {/* Desconectadas */}
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
-                <XCircle size={20} className="text-red-500" />
-              </div>
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border rounded-xl p-4 hover:border-accent/40 transition-all shadow-sm">
+            <div className="flex items-center justify-between mb-2">
               <div>
-                <span className="text-2xl font-bold text-red-500">{disconnectedInstances.length}</span>
-                <span className="text-xs text-muted-foreground ml-2">inativas</span>
+                <span className="text-2xl font-semibold text-gray-900 dark:text-foreground">{disconnectedInstances.length}</span>
+                <span className="text-xs text-gray-600 dark:text-muted-foreground ml-2">inativas</span>
+              </div>
+              <div className="w-10 h-10 bg-accent/15 dark:bg-accent/10 rounded-lg flex items-center justify-center">
+                <XCircle size={20} className="text-accent" />
               </div>
             </div>
-            <h3 className="text-sm font-medium text-foreground">Desconectadas</h3>
-            <p className="text-xs text-muted-foreground mt-1">Contas inativas</p>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-foreground">Desconectadas</h3>
+            <p className="text-xs text-gray-600 dark:text-muted-foreground mt-1">Contas inativas</p>
           </div>
         </div>
 
@@ -796,178 +808,261 @@ const ConexoesPage: React.FC = () => {
       </div>
 
       {/* Modal de Criar Nova Conexão */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-card border border-border rounded-xl p-6 w-full max-w-md"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-foreground">Nova Conexão WhatsApp</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Nome do Dispositivo
-                </label>
-                <input
-                  type="text"
-                  value={newInstanceName}
-                  onChange={(e) => setNewInstanceName(e.target.value)}
-                  placeholder="Ex: WhatsApp Principal"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/40 text-foreground"
-                  disabled={isLoading}
-                />
-              </div>
-
-              <div className="bg-muted/20 border border-muted rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <AlertCircle size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
-                  <div className="text-xs text-muted-foreground">
-                    <p className="font-medium text-foreground mb-1">Como funciona:</p>
-                    <ul className="space-y-1">
-                      <li>• Será criada uma nova instância do WhatsApp</li>
-                      <li>• Você receberá um QR Code para conectar</li>
-                      <li>• Escaneie com seu WhatsApp para ativar</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                disabled={isLoading}
-                className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={createInstance}
-                disabled={!newInstanceName.trim() || isLoading}
-                className="px-6 py-2 bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-accent-foreground/20 border-t-accent-foreground rounded-full animate-spin" />
-                    Criando...
-                  </>
-                ) : (
-                  <>
-                    <Plus size={16} />
-                    Criar Conexão
-                  </>
-                )}
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Modal de QR Code */}
-      {showQrModal && selectedInstance && (
-        <>
-          {/* Esconder menu mobile */}
-          <style>{`
-            nav.md\\:hidden {
-              display: none !important;
-            }
-          `}</style>
-          
-          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+      <AnimatePresence>
+        {showCreateModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-card border border-border rounded-xl p-4 sm:p-6 w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
             >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <h2 className="text-base sm:text-lg font-semibold text-foreground">Conectar WhatsApp</h2>
-                <button
-                  onClick={() => setShowQrModal(false)}
-                  className="text-muted-foreground hover:text-foreground transition-colors p-1"
-                >
-                  <X size={18} />
-                </button>
+              {/* Header com gradiente sutil */}
+              <div className="relative bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-6 border-b border-border">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-emerald-500"></div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                      <MessageCircle size={24} className="text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold text-foreground">Nova Conexão</h2>
+                      <p className="text-sm text-muted-foreground">WhatsApp Business</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowCreateModal(false)}
+                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-black/20 rounded-lg transition-all"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
-              <div className="text-center space-y-3 sm:space-y-4">
-                {/* Info da instância */}
-                <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-accent/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Phone size={16} className="text-accent sm:w-5 sm:h-5" />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="text-sm font-medium text-foreground">{selectedInstance.name}</h3>
-                    <p className="text-xs text-muted-foreground">Aguardando conexão...</p>
+              <div className="p-6 space-y-6">
+                {/* Input com design mais elegante */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-foreground">
+                    Nome do Dispositivo
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={newInstanceName}
+                      onChange={(e) => setNewInstanceName(e.target.value)}
+                      placeholder="Ex: WhatsApp Principal"
+                      className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-foreground placeholder:text-muted-foreground transition-all"
+                      disabled={isLoading}
+                    />
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <Phone size={16} className="text-muted-foreground" />
+                    </div>
                   </div>
                 </div>
 
-                {/* QR Code */}
-                {selectedInstance.qrCode ? (
-                  <div className="bg-white p-3 sm:p-4 rounded-xl border-2 border-border">
-                    <img
-                      src={selectedInstance.qrCode}
-                      alt="QR Code WhatsApp"
-                      className="w-full max-w-[160px] sm:max-w-[200px] mx-auto"
-                    />
-                  </div>
-                ) : (
-                  <div className="bg-muted/20 border-2 border-dashed border-muted rounded-xl p-6 sm:p-8">
-                    <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-accent mx-auto mb-2 sm:mb-3"></div>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Gerando QR Code...</p>
-                  </div>
-                )}
-
-                {/* Instruções */}
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-2.5 sm:p-3">
-                  <div className="flex items-start gap-2">
-                    <MessageCircle size={14} className="text-blue-500 mt-0.5 flex-shrink-0" />
-                    <div className="text-xs text-muted-foreground text-left">
-                      <p className="font-medium text-foreground mb-1">Como conectar:</p>
-                      <ol className="space-y-0.5 sm:space-y-1 list-decimal list-inside text-xs">
-                        <li>Abra o WhatsApp no seu celular</li>
-                        <li>Toque em Mais opções → Dispositivos conectados</li>
-                        <li>Toque em "Conectar um dispositivo"</li>
-                        <li>Aponte a câmera para este QR code</li>
-                      </ol>
+                {/* Info card redesenhado */}
+                <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Settings size={16} className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="text-sm">
+                      <p className="font-medium text-foreground mb-2">Como funciona:</p>
+                      <div className="space-y-1.5 text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                          <span>Instância WhatsApp será criada</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                          <span>QR Code gerado automaticamente</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                          <span>Escaneie para conectar seu WhatsApp</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Botões */}
-              <div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3 mt-4 sm:mt-6">
-                <button
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  className="px-3 sm:px-4 py-2 bg-accent text-accent-foreground hover:bg-accent/90 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <RefreshCw size={12} className={`${isRefreshing ? 'animate-spin' : ''} sm:w-3.5 sm:h-3.5`} />
-                  {isRefreshing ? 'Verificando...' : 'Verificar Status'}
-                </button>
-                <button
-                  onClick={() => setShowQrModal(false)}
-                  className="px-3 sm:px-6 py-2 bg-muted text-muted-foreground hover:bg-muted/80 rounded-lg transition-colors text-xs sm:text-sm font-medium"
-                >
-                  Fechar
-                </button>
+              {/* Footer com botões melhorados */}
+              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-border">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowCreateModal(false)}
+                    disabled={isLoading}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={createInstance}
+                    disabled={!newInstanceName.trim() || isLoading}
+                    className="flex-1 px-6 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Criando Conexão...
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={16} />
+                        Criar Conexão
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
-        </>
-      )}
+        )}
+      </AnimatePresence>
+
+      {/* Modal de QR Code */}
+      <AnimatePresence>
+        {showQrModal && selectedInstance && (
+          <>
+            {/* Esconder menu mobile */}
+            <style>{`
+              nav.md\\:hidden {
+                display: none !important;
+              }
+            `}</style>
+            
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-hidden"
+              >
+                {/* Header elegante */}
+                <div className="relative bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-4 sm:p-6 border-b border-border">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-emerald-500"></div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                        <QrCode size={20} className="text-green-600 dark:text-green-400 sm:w-6 sm:h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-lg sm:text-xl font-semibold text-foreground">Conectar WhatsApp</h2>
+                        <p className="text-xs sm:text-sm text-muted-foreground">{selectedInstance.name}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowQrModal(false)}
+                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-black/20 rounded-lg transition-all"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+                  {/* Status da conexão */}
+                  <div className="flex items-center justify-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl">
+                    <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                    <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Aguardando conexão...</p>
+                  </div>
+
+                  {/* QR Code com design melhorado */}
+                  <div className="text-center">
+                    {selectedInstance.qrCode ? (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="relative"
+                      >
+                        <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-lg border-2 border-green-200 dark:border-green-800 mx-auto inline-block">
+                          <img
+                            src={selectedInstance.qrCode}
+                            alt="QR Code WhatsApp"
+                            className="w-40 h-40 sm:w-48 sm:h-48 mx-auto"
+                          />
+                        </div>
+                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                          <CheckCircle size={12} className="text-white" />
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl p-8 sm:p-12">
+                        <div className="space-y-4">
+                          {/* Animação de carregamento mais elaborada */}
+                          <div className="relative mx-auto w-16 h-16 sm:w-20 sm:h-20">
+                            <div className="absolute inset-0 border-4 border-green-200 dark:border-green-800 rounded-full"></div>
+                            <div className="absolute inset-0 border-4 border-transparent border-t-green-500 rounded-full animate-spin"></div>
+                            <div className="absolute inset-2 border-2 border-transparent border-t-emerald-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <QrCode size={24} className="text-green-600 dark:text-green-400" />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-sm sm:text-base font-medium text-foreground">Conectando WhatsApp...</p>
+                            <p className="text-xs sm:text-sm text-muted-foreground">Gerando QR Code seguro</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Instruções elegantes */}
+                  <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <MessageCircle size={16} className="text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="text-sm">
+                        <p className="font-medium text-foreground mb-2">Como conectar:</p>
+                        <div className="space-y-1.5 text-muted-foreground">
+                          <div className="flex items-start gap-2">
+                            <span className="w-5 h-5 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-xs font-medium text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5">1</span>
+                            <span>Abra o WhatsApp no seu celular</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="w-5 h-5 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-xs font-medium text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5">2</span>
+                            <span>Vá em Configurações → Dispositivos conectados</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="w-5 h-5 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-xs font-medium text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5">3</span>
+                            <span>Toque em "Conectar um dispositivo"</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="w-5 h-5 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-xs font-medium text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5">4</span>
+                            <span>Aponte a câmera para este QR code</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer com botões melhorados */}
+                <div className="px-4 sm:px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-border">
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleRefresh}
+                      disabled={isRefreshing}
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <RefreshCw size={14} className={`${isRefreshing ? 'animate-spin' : ''}`} />
+                      {isRefreshing ? 'Verificando...' : 'Verificar Status'}
+                    </button>
+                    <button
+                      onClick={() => setShowQrModal(false)}
+                      className="flex-1 px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

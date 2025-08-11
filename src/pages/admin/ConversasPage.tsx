@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   MessageCircle, 
   X, 
@@ -51,6 +51,7 @@ type FiltroDia = 'hoje' | 'ontem' | 'semana' | 'mes' | 'todos';
 
 const ConversasPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [conversasAgrupadas, setConversasAgrupadas] = useState<ConversaAgrupada[]>([]);
   const [conversaSelecionada, setConversaSelecionada] = useState<ConversaAgrupada | null>(null);
   const [mensagensConversa, setMensagensConversa] = useState<Conversa[]>([]);
@@ -73,6 +74,15 @@ const ConversasPage: React.FC = () => {
   useEffect(() => {
     loadConversas();
     loadStats();
+    
+    // Verificar se há parâmetro de telefone na URL e aplicar filtro
+    const searchParams = new URLSearchParams(location.search);
+    const telefoneParam = searchParams.get('telefone');
+    if (telefoneParam) {
+      setSearchTerm(telefoneParam);
+      // Limpar o parâmetro da URL após aplicar o filtro
+      navigate(location.pathname, { replace: true });
+    }
   }, []);
 
   // Cleanup: reabilitar scroll quando componente for desmontado
@@ -504,60 +514,60 @@ const ConversasPage: React.FC = () => {
         {/* Stats Cards - Desktop */}
         <div className="hidden md:block mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                  <MessageCircle size={20} className="text-blue-500" />
-                </div>
+            <div className="bg-white dark:bg-card border border-gray-200 dark:border-border rounded-xl p-4 hover:border-accent/40 transition-all shadow-sm">
+              <div className="flex items-center justify-between mb-2">
                 <div>
-                  <span className="text-2xl font-bold text-blue-500">{stats?.totalConversas || 0}</span>
-                  <span className="text-xs text-muted-foreground ml-2">total</span>
+                  <span className="text-2xl font-semibold text-gray-900 dark:text-foreground">{stats?.totalConversas || 0}</span>
+                  <span className="text-xs text-gray-600 dark:text-muted-foreground ml-2">total</span>
+                </div>
+                <div className="w-10 h-10 bg-accent/15 dark:bg-accent/10 rounded-lg flex items-center justify-center">
+                  <MessageCircle size={20} className="text-accent" />
                 </div>
               </div>
-              <h3 className="text-sm font-medium text-foreground">Total Conversas</h3>
-              <p className="text-xs text-muted-foreground mt-1">Mensagens trocadas</p>
+              <h3 className="text-sm font-medium text-gray-900 dark:text-foreground">Total Conversas</h3>
+              <p className="text-xs text-gray-600 dark:text-muted-foreground mt-1">Mensagens trocadas</p>
             </div>
 
-            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
-                  <Building size={20} className="text-green-500" />
-                </div>
+            <div className="bg-white dark:bg-card border border-gray-200 dark:border-border rounded-xl p-4 hover:border-accent/40 transition-all shadow-sm">
+              <div className="flex items-center justify-between mb-2">
                 <div>
-                  <span className="text-2xl font-bold text-green-500">{stats?.totalEmpresas || 0}</span>
-                  <span className="text-xs text-muted-foreground ml-2">empresas</span>
+                  <span className="text-2xl font-semibold text-gray-900 dark:text-foreground">{stats?.totalEmpresas || 0}</span>
+                  <span className="text-xs text-gray-600 dark:text-muted-foreground ml-2">empresas</span>
+                </div>
+                <div className="w-10 h-10 bg-accent/15 dark:bg-accent/10 rounded-lg flex items-center justify-center">
+                  <Building size={20} className="text-accent" />
                 </div>
               </div>
-              <h3 className="text-sm font-medium text-foreground">Empresas Ativas</h3>
-              <p className="text-xs text-muted-foreground mt-1">Com conversas</p>
+              <h3 className="text-sm font-medium text-gray-900 dark:text-foreground">Empresas Ativas</h3>
+              <p className="text-xs text-gray-600 dark:text-muted-foreground mt-1">Com conversas</p>
             </div>
 
-            <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                  <Send size={20} className="text-purple-500" />
-                </div>
+            <div className="bg-white dark:bg-card border border-gray-200 dark:border-border rounded-xl p-4 hover:border-accent/40 transition-all shadow-sm">
+              <div className="flex items-center justify-between mb-2">
                 <div>
-                  <span className="text-2xl font-bold text-purple-500">{stats?.mensagensEnviadas || 0}</span>
-                  <span className="text-xs text-muted-foreground ml-2">enviadas</span>
+                  <span className="text-2xl font-semibold text-gray-900 dark:text-foreground">{stats?.mensagensEnviadas || 0}</span>
+                  <span className="text-xs text-gray-600 dark:text-muted-foreground ml-2">enviadas</span>
+                </div>
+                <div className="w-10 h-10 bg-accent/15 dark:bg-accent/10 rounded-lg flex items-center justify-center">
+                  <Send size={20} className="text-accent" />
                 </div>
               </div>
-              <h3 className="text-sm font-medium text-foreground">Mensagens Enviadas</h3>
-              <p className="text-xs text-muted-foreground mt-1">Por você</p>
+              <h3 className="text-sm font-medium text-gray-900 dark:text-foreground">Mensagens Enviadas</h3>
+              <p className="text-xs text-gray-600 dark:text-muted-foreground mt-1">Por você</p>
             </div>
 
-            <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
-                  <MessageCircle size={20} className="text-orange-500" />
-                </div>
+            <div className="bg-white dark:bg-card border border-gray-200 dark:border-border rounded-xl p-4 hover:border-accent/40 transition-all shadow-sm">
+              <div className="flex items-center justify-between mb-2">
                 <div>
-                  <span className="text-2xl font-bold text-orange-500">{stats?.taxaResposta || 0}%</span>
-                  <span className="text-xs text-muted-foreground ml-2">taxa</span>
+                  <span className="text-2xl font-semibold text-gray-900 dark:text-foreground">{stats?.taxaResposta || 0}%</span>
+                  <span className="text-xs text-gray-600 dark:text-muted-foreground ml-2">taxa</span>
+                </div>
+                <div className="w-10 h-10 bg-accent/15 dark:bg-accent/10 rounded-lg flex items-center justify-center">
+                  <MessageCircle size={20} className="text-accent" />
                 </div>
               </div>
-              <h3 className="text-sm font-medium text-foreground">Taxa de Resposta</h3>
-              <p className="text-xs text-muted-foreground mt-1">Empresas que responderam</p>
+              <h3 className="text-sm font-medium text-gray-900 dark:text-foreground">Taxa de Resposta</h3>
+              <p className="text-xs text-gray-600 dark:text-muted-foreground mt-1">Empresas que responderam</p>
             </div>
           </div>
         </div>

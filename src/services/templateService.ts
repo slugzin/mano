@@ -63,6 +63,25 @@ export const templateService = {
       }
 
       console.log('✅ Template criado:', data);
+      
+      // INCREMENTAR USO DO PLANO GRATUITO
+      try {
+        console.log('Incrementando uso de templates: +1');
+        const { data: incrementData, error: incrementError } = await supabase.rpc('increment_daily_usage', {
+          p_user_id: user.user.id,
+          p_usage_type: 'templates',
+          p_quantity: 1
+        });
+        
+        if (incrementError) {
+          console.error('Erro ao incrementar uso diário de templates:', incrementError);
+        } else {
+          console.log('Uso diário de templates incrementado com sucesso');
+        }
+      } catch (incrementError) {
+        console.error('Erro ao atualizar uso diário de templates:', incrementError);
+      }
+      
       return { success: true, data };
     } catch (error) {
       console.error('Erro ao criar template:', error);

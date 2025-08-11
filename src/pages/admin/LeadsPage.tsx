@@ -6,6 +6,7 @@ import PageHeader from '../../components/ui/PageHeader';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePlanLimits } from '../../contexts/PlanLimitsContext';
 
 interface Location {
   name: string;
@@ -17,6 +18,7 @@ interface Location {
 
 const LeadsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { canPerformAction, getRemainingLimit, setShowUpgradeModal, setUpgradeReason, refreshLimits } = usePlanLimits();
   const [formData, setFormData] = useState({
     tipoEmpresa: '',
     pais: 'BR',
@@ -40,6 +42,8 @@ const LeadsPage: React.FC = () => {
   const [verificandoWhatsApp, setVerificandoWhatsApp] = useState(false);
   const [empresasComWhatsApp, setEmpresasComWhatsApp] = useState<(Empresa & { temWhatsapp?: boolean })[]>([]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showLimitWarningModal, setShowLimitWarningModal] = useState(false);
+  const [warningData, setWarningData] = useState<{ requested: number; available: number } | null>(null);
   
   const [locations, setLocations] = useState<Location[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
@@ -148,7 +152,26 @@ const LeadsPage: React.FC = () => {
     }
 
     // Garantir que a quantidade seja pelo menos 10
-    const quantidadeFinal = Math.max(formData.quantidadeEmpresas || 10, 10);
+    let quantidadeFinal = Math.max(formData.quantidadeEmpresas || 10, 10);
+    
+    // Verificar limites do plano
+    const remainingEmpresas = getRemainingLimit('empresas');
+    
+    if (!(await canPerformAction('buscar_empresas', quantidadeFinal))) {
+      if (remainingEmpresas === 0) {
+        setUpgradeReason('Limite de empresas atingido. Fale no WhatsApp para fazer upgrade com desconto exclusivo!');
+        setShowUpgradeModal(true);
+        return;
+      } else {
+        // Mostrar popup de aviso sobre limitação
+        setWarningData({
+          requested: formData.quantidadeEmpresas,
+          available: remainingEmpresas
+        });
+        setShowLimitWarningModal(true);
+        return;
+      }
+    }
     const dadosBusca = {
       ...formData,
       quantidadeEmpresas: quantidadeFinal
@@ -164,6 +187,19 @@ const LeadsPage: React.FC = () => {
       if (result.success && result.data) {
         setEmpresas(result.data.empresas);
         console.log('Empresas encontradas:', result.data.empresas);
+        
+        // Feedback sobre busca dinâmica
+        if (result.data.paginaInicial && result.data.paginaInicial > 1) {
+          console.log(`🔍 Busca dinâmica ativada! Iniciou na página ${result.data.paginaInicial} para evitar duplicatas.`);
+        }
+        
+        // Atualizar os limites após busca bem-sucedida
+        await refreshLimits();
+        
+        // Mostrar modal de upgrade se foram limitadas as empresas
+        if (quantidadeFinal < formData.quantidadeEmpresas) {
+          setTimeout(() => setShowUpgradeModal(true), 1000);
+        }
       } else {
         setErrorMessage(result.error || 'Erro ao buscar empresas');
       }
@@ -322,6 +358,31 @@ const LeadsPage: React.FC = () => {
         setEmpresasSalvas(true);
         console.log('Empresas salvas:', result.empresasSalvas);
         
+        // INCREMENTAR USO DO PLANO GRATUITO
+        if (result.empresasSalvas && result.empresasSalvas > 0) {
+          try {
+            const { data: user } = await supabase.auth.getUser();
+            if (user.user) {
+              console.log(`Incrementando uso de empresas: +${result.empresasSalvas}`);
+              const { data, error } = await supabase.rpc('increment_daily_usage', {
+                p_user_id: user.user.id,
+                p_usage_type: 'empresas',
+                p_quantity: result.empresasSalvas
+              });
+              
+              if (error) {
+                console.error('Erro ao incrementar uso diário:', error);
+              } else {
+                console.log('Uso diário incrementado com sucesso');
+                // Atualizar limites após incrementar uso
+                await refreshLimits();
+              }
+            }
+          } catch (error) {
+            console.error('Erro ao atualizar uso diário:', error);
+          }
+        }
+        
         // Mostrar modal de sucesso
         setShowSuccessModal(true);
       } else {
@@ -337,7 +398,46 @@ const LeadsPage: React.FC = () => {
     }
   };
 
-
+  // Função para prosseguir com a busca limitada
+  const handleProceedWithLimit = async () => {
+    if (!warningData) return;
+    
+    setShowLimitWarningModal(false);
+    setLoading(true);
+    setErrorMessage('');
+    setEmpresasSalvas(false);
+    
+    try {
+      const dadosBusca = {
+        ...formData,
+        quantidadeEmpresas: warningData.available
+      };
+      
+      const result = await captarEmpresas(dadosBusca);
+      
+      if (result.success && result.data) {
+        setEmpresas(result.data.empresas);
+        console.log('Empresas encontradas:', result.data.empresas);
+        
+        // Feedback sobre busca dinâmica
+        if (result.data.paginaInicial && result.data.paginaInicial > 1) {
+          console.log(`🔍 Busca dinâmica ativada! Iniciou na página ${result.data.paginaInicial} para evitar duplicatas.`);
+        }
+        
+        // Atualizar os limites após busca bem-sucedida
+        await refreshLimits();
+        
+      } else {
+        setErrorMessage(result.error || 'Erro ao buscar empresas');
+      }
+    } catch (error) {
+      console.error('Erro na requisição:', error);
+      setErrorMessage('Erro de conexão. Tente novamente.');
+    } finally {
+      setLoading(false);
+      setWarningData(null);
+    }
+  };
 
   return (
     <div className="min-h-full bg-background p-2 md:p-6">
@@ -849,6 +949,60 @@ const LeadsPage: React.FC = () => {
                     >
                       <span>🚀</span>
                       Ir para Disparos
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal de Aviso de Limite */}
+        <AnimatePresence>
+          {showLimitWarningModal && warningData && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-background rounded-lg shadow-xl max-w-md w-full border border-border"
+              >
+                <div className="p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                      <Building className="w-5 h-5 text-[#512FEB] dark:text-purple-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">Limite do Plano Gratuito</h3>
+                      <p className="text-sm text-muted-foreground">Ajustaremos sua busca</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-6">
+                    <p className="text-sm text-foreground mb-3">
+                      Você solicitou <span className="font-semibold text-[#512FEB]">{warningData.requested} empresas</span>, 
+                      mas seu limite atual é de <span className="font-semibold text-green-600">{warningData.available} empresas</span>.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Vamos buscar {warningData.available} empresas para você. Para ter acesso ilimitado, fale no WhatsApp para upgrade com desconto exclusivo!
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setShowLimitWarningModal(false);
+                        setWarningData(null);
+                      }}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-muted-foreground bg-muted/50 rounded-lg hover:bg-muted transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleProceedWithLimit}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-[#512FEB] to-purple-600 rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all shadow-sm"
+                    >
+                      Buscar {warningData.available}
                     </button>
                   </div>
                 </div>

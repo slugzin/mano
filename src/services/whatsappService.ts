@@ -92,6 +92,24 @@ export const whatsappService = {
         console.error('❌ Erro ao salvar no banco:', dbError);
       } else {
         console.log('✅ Instância salva no banco com sucesso!');
+        
+        // INCREMENTAR USO DO PLANO GRATUITO
+        try {
+          console.log('Incrementando uso de conexões: +1');
+          const { data: incrementData, error: incrementError } = await supabase.rpc('increment_daily_usage', {
+            p_user_id: user.user.id,
+            p_usage_type: 'conexoes',
+            p_quantity: 1
+          });
+          
+          if (incrementError) {
+            console.error('Erro ao incrementar uso diário de conexões:', incrementError);
+          } else {
+            console.log('Uso diário de conexões incrementado com sucesso');
+          }
+        } catch (incrementError) {
+          console.error('Erro ao atualizar uso diário de conexões:', incrementError);
+        }
       }
 
       return {

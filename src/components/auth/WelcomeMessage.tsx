@@ -23,7 +23,7 @@ const WelcomeMessage: React.FC<WelcomeMessageProps> = ({
           
           {/* Título */}
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-            Bem-vindo ao Prospect CRM! 🎉
+            Bem-vindo ao CaptaZap! 🎉
           </h2>
           
           {/* Mensagem */}

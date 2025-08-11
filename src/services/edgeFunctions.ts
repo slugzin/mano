@@ -28,7 +28,9 @@ export interface CaptarEmpresasResponse {
   data?: {
     empresas: Empresa[];
     totalEncontradas: number;
-    parametrosBusca: {
+    paginaInicial?: number;
+    totalPaginas?: number;
+    parametrosBusca?: {
       tipoEmpresa: string;
       localizacao: string;
       pais: string;
@@ -40,9 +42,92 @@ export interface CaptarEmpresasResponse {
   error?: string;
 }
 
+// Interface para controlar offset de buscas
+interface BuscaOffset {
+  query: string;
+  location: string;
+  lastPage: number;
+  lastTimestamp: number;
+}
+
+// Função para calcular próxima página baseada em buscas anteriores
+async function getNextPageForSearch(query: string, location: string, userId: string): Promise<number> {
+  try {
+    // Buscar histórico de buscas similares nas últimas 24h
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    
+    const { data: recentSearches } = await supabase
+      .from('empresas')
+      .select('parametros_busca')
+      .eq('user_id', userId)
+      .gte('capturado_em', oneDayAgo)
+      .order('capturado_em', { ascending: false })
+      .limit(50);
+    
+    if (!recentSearches || recentSearches.length === 0) {
+      return 1; // Primeira busca, começar da página 1
+    }
+    
+    // Analisar buscas similares
+    let maxPage = 0;
+    const normalizedQuery = query.toLowerCase().trim();
+    const normalizedLocation = location.toLowerCase().trim();
+    
+    for (const search of recentSearches) {
+      try {
+        const params = typeof search.parametros_busca === 'string' 
+          ? JSON.parse(search.parametros_busca) 
+          : search.parametros_busca;
+        
+        const searchQuery = params?.tipoEmpresa?.toLowerCase().trim() || '';
+        const searchLocation = params?.localizacao?.toLowerCase().trim() || '';
+        
+        // Verificar se é busca similar (mesmo tipo + mesma localização)
+        if (searchQuery === normalizedQuery && searchLocation === normalizedLocation) {
+          // Estimar página baseada na quantidade de empresas já capturadas
+          const empresasPorPagina = 10;
+          const estimatedPage = Math.floor(maxPage / empresasPorPagina) + 1;
+          maxPage = Math.max(maxPage, estimatedPage);
+        }
+      } catch (e) {
+        // Ignorar erros de parsing
+        continue;
+      }
+    }
+    
+    // Calcular próxima página
+    const nextPage = maxPage + 1;
+    
+    console.log(`🔍 Busca dinâmica: "${query}" em "${location}" → Página ${nextPage}`);
+    console.log(`📊 Análise: ${recentSearches.length} buscas recentes, maior página encontrada: ${maxPage}`);
+    
+    return Math.max(1, nextPage); // Nunca retornar página menor que 1
+    
+  } catch (error) {
+    console.error('Erro ao calcular próxima página:', error);
+    return 1; // Fallback para página 1 em caso de erro
+  }
+}
+
 export async function captarEmpresas(dados: CaptarEmpresasRequest): Promise<CaptarEmpresasResponse> {
   try {
     console.log('Iniciando captura de empresas:', dados);
+    
+    // Obter usuário atual
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) {
+      return {
+        success: false,
+        error: 'Usuário não autenticado'
+      };
+    }
+    
+    // Calcular página inicial dinâmica
+    const paginaInicial = await getNextPageForSearch(
+      dados.tipoEmpresa,
+      dados.localizacao || '',
+      user.user.id
+    );
     
     // Converter dados para o novo formato da API
     const requestBody = {
@@ -50,25 +135,26 @@ export async function captarEmpresas(dados: CaptarEmpresasRequest): Promise<Capt
       country: dados.pais.toLowerCase(),
       language: dados.idioma,
       location: dados.localizacao || '',
-      page: 1
+      page: paginaInicial // Usar página dinâmica em vez de sempre 1
     };
     
     // Calcular quantas requisições precisamos fazer
-    // Cada requisição retorna ~10 empresas
     const empresasPorPagina = 10;
     const totalPaginas = Math.ceil(dados.quantidadeEmpresas / empresasPorPagina);
     
-    console.log(`Fazendo ${totalPaginas} requisições para ${dados.quantidadeEmpresas} empresas`);
+    console.log(`🚀 Busca dinâmica iniciando na página ${paginaInicial}`);
+    console.log(`📄 Fazendo ${totalPaginas} requisições para ${dados.quantidadeEmpresas} empresas`);
     
     const todasEmpresas: Empresa[] = [];
     
-    // Fazer múltiplas requisições se necessário
-    for (let pagina = 1; pagina <= totalPaginas; pagina++) {
-      console.log(`Fazendo requisição página ${pagina}/${totalPaginas}`);
+    // Fazer múltiplas requisições sequenciais a partir da página inicial
+    for (let i = 0; i < totalPaginas; i++) {
+      const paginaAtual = paginaInicial + i;
+      console.log(`Fazendo requisição página ${paginaAtual} (${i + 1}/${totalPaginas})`);
       
       const bodyPagina = {
         ...requestBody,
-        page: pagina
+        page: paginaAtual
       };
       
       const { data, error } = await supabase.functions.invoke('captar-empresas', {
@@ -76,66 +162,49 @@ export async function captarEmpresas(dados: CaptarEmpresasRequest): Promise<Capt
       });
 
       if (error) {
-        console.error(`Erro na página ${pagina}:`, error);
+        console.error(`Erro na página ${paginaAtual}:`, error);
         // Se uma página falhar, continuar com as outras
         continue;
       }
 
       // Processar resposta da página
-      console.log('Resposta da API página', pagina, ':', data);
+      console.log('Resposta da API página', paginaAtual, ':', data);
       
       if (data && data.places && Array.isArray(data.places)) {
         // Formato da API Serper: { places: [...] }
         todasEmpresas.push(...data.places);
-        console.log(`Página ${pagina} retornou ${data.places.length} empresas`);
-      } else if (data && Array.isArray(data)) {
-        // Se a resposta é um array direto
-        todasEmpresas.push(...data);
-        console.log(`Página ${pagina} retornou ${data.length} empresas`);
-      } else if (data && data.empresas && Array.isArray(data.empresas)) {
-        // Se a resposta tem estrutura { empresas: [...] }
-        todasEmpresas.push(...data.empresas);
-        console.log(`Página ${pagina} retornou ${data.empresas.length} empresas`);
+        console.log(`✅ Página ${paginaAtual} retornou ${data.places.length} empresas`);
       } else {
-        console.error(`Formato de resposta não reconhecido na página ${pagina}:`, data);
+        console.warn(`⚠️ Página ${paginaAtual} não retornou empresas válidas`);
+      }
+      
+      // Pequeno delay entre requisições para não sobrecarregar a API
+      if (i < totalPaginas - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
     
-    // Limitar ao número solicitado e remover duplicatas baseadas no CID ou title+address
-    const empresasUnicas = todasEmpresas
-      .filter((empresa, index, self) => {
-        if (empresa.cid) {
-          // Se tem CID, usar ele para identificar duplicatas
-          return index === self.findIndex(e => e.cid === empresa.cid);
-        } else {
-          // Senão, usar title + address
-          return index === self.findIndex(e => 
-            e.title === empresa.title && 
-            (e.address || '') === (empresa.address || '')
-          );
-        }
-      })
-      .slice(0, dados.quantidadeEmpresas);
+    console.log(`🎯 Total de empresas encontradas: ${todasEmpresas.length}`);
     
-    console.log(`Total de empresas encontradas: ${empresasUnicas.length}`);
+    if (todasEmpresas.length === 0) {
+      return {
+        success: false,
+        error: 'Nenhuma empresa encontrada para os critérios especificados'
+      };
+    }
     
     return {
       success: true,
       data: {
-        empresas: empresasUnicas,
-        totalEncontradas: empresasUnicas.length,
-        parametrosBusca: {
-          tipoEmpresa: dados.tipoEmpresa,
-          localizacao: dados.localizacao || '',
-          pais: dados.pais,
-          idioma: dados.idioma,
-          quantidadeSolicitada: dados.quantidadeEmpresas
-        }
+        empresas: todasEmpresas,
+        totalEncontradas: todasEmpresas.length,
+        paginaInicial: paginaInicial,
+        totalPaginas: totalPaginas
       }
     };
     
   } catch (error) {
-    console.error('Erro na requisição:', error);
+    console.error('Erro na requisição de capturar empresas:', error);
     return {
       success: false,
       error: 'Erro de conexão. Tente novamente.'
@@ -325,22 +394,28 @@ export async function salvarEmpresas(dados: SalvarEmpresasRequest): Promise<Salv
       };
     }
 
+    // Função para truncar strings muito longas e evitar erros de banco
+    const truncateString = (str: string | null | undefined, maxLength: number = 255): string | null => {
+      if (!str) return null;
+      return str.length > maxLength ? str.substring(0, maxLength).trim() : str;
+    };
+
     const empresasFormatadas = empresasNovas.map(empresa => {
       return {
-        empresa_nome: empresa.title,
-        endereco: empresa.address || null,
-        categoria: empresa.category || null,
-        telefone: empresa.phoneNumber || null,
-        website: empresa.website || null,
+        empresa_nome: truncateString(empresa.title, 255),
+        endereco: truncateString(empresa.address, 500), // Endereços podem ser longos
+        categoria: truncateString(empresa.category, 255),
+        telefone: truncateString(empresa.phoneNumber, 50),
+        website: truncateString(empresa.website, 500), // URLs podem ser longas
         latitude: empresa.latitude || null,
         longitude: empresa.longitude || null,
         avaliacao: empresa.rating || null,
         total_avaliacoes: empresa.ratingCount || 0,
         posicao: empresa.position,
-        cid: empresa.cid || null,
+        cid: truncateString(empresa.cid, 100),
         links_agendamento: empresa.bookingLinks ? JSON.stringify(empresa.bookingLinks) : null,
         parametros_busca: JSON.stringify(dados.parametrosBusca),
-        pesquisa: dados.parametrosBusca.tipoEmpresa,
+        pesquisa: truncateString(dados.parametrosBusca.tipoEmpresa, 255),
         status: 'a_contatar', // Definir status inicial como 'a_contatar'
         tem_whatsapp: (empresa as any).temWhatsapp || false, // Usar informação já verificada
         user_id: user.user.id // Adicionar user_id
@@ -359,9 +434,24 @@ export async function salvarEmpresas(dados: SalvarEmpresasRequest): Promise<Salv
 
     if (error) {
       console.error('Erro ao salvar empresas:', error);
+      
+      let errorMessage = 'Erro ao salvar empresas no banco';
+      
+      // Tratar erros específicos
+      if (error.code === '22001') {
+        errorMessage = 'Alguns dados das empresas são muito longos. Os dados foram ajustados automaticamente.';
+        console.warn('Dados truncados devido a limite de tamanho');
+      } else if (error.code === '23505') {
+        errorMessage = 'Algumas empresas já existem no seu banco de dados.';
+      } else if (error.message?.includes('value too long')) {
+        errorMessage = 'Alguns dados das empresas excedem o limite permitido. Tente novamente.';
+      } else if (error.message?.includes('violates row-level security')) {
+        errorMessage = 'Erro de permissão. Verifique se você está logado corretamente.';
+      }
+      
       return {
         success: false,
-        error: error.message || 'Erro ao salvar empresas no banco'
+        error: errorMessage
       };
     }
 

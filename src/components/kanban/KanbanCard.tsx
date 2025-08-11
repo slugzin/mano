@@ -39,10 +39,10 @@ export function KanbanCard({ empresa, onDisparar, onAbrirDetalhes, isAContatar, 
         ref={setNodeRef}
         style={style}
         className={`
-          group relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 
-          rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300
-          ${isDragging ? 'opacity-50 scale-95' : 'opacity-100 scale-100'}
-          hover:border-blue-300 dark:hover:border-blue-600
+          group relative bg-card/60 backdrop-blur-sm border border-border 
+          rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300
+          ${isDragging ? 'opacity-60 scale-95' : 'opacity-100 scale-100'}
+          hover:border-accent/40
         `}
       >
         {/* Área de Drag - Header */}

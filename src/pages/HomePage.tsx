@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Building, Target, Zap, Users, MapPin, Globe, Search, ChevronRight, Play, CheckCircle, X, ChevronDown } from '../utils/icons';
+import FAQ from '../components/ui/FAQ';
 
 interface Location {
   name: string;
@@ -248,12 +249,12 @@ const HomePage: React.FC = () => {
     {
       number: "01",
       title: "Defina seu Segmento",
-      description: "Escolha o tipo de empresa que você quer prospectar"
+      description: "Escolha o tipo de empresa que você quer captar com CaptaZap"
     },
     {
       number: "02", 
       title: "Escolha a Localização",
-      description: "Selecione a região onde quer buscar seus prospects"
+      description: "Selecione a região onde quer buscar seus leads"
     },
     {
       number: "03",
@@ -281,17 +282,13 @@ const HomePage: React.FC = () => {
                 </div>
               </div>
               
-              <h1 className="text-5xl md:text-6xl font-bold mb-6">
-                <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  Quem é seu
-                </span>
-                <br />
-                <span className="text-white">cliente ideal?</span>
+              <h1 className="text-4xl md:text-6xl font-bold text-center mb-6">
+                Descubra Seus Leads com CaptaZap
               </h1>
               
               <p className="text-xl text-gray-400 mb-8 max-w-3xl mx-auto leading-relaxed">
                 Descubra e conecte-se com empresas que realmente precisam do que você oferece. 
-                Deixe nossa inteligência encontrar seus prospects perfeitos enquanto você foca no que importa: <strong className="text-white">crescer</strong>.
+                Deixe nossa inteligência encontrar seus leads perfeitos enquanto você foca no que importa: <strong className="text-white">crescer</strong>.
               </p>
               
               <div className="flex items-center justify-center gap-4 mb-12">
@@ -385,7 +382,7 @@ const HomePage: React.FC = () => {
               Como Funciona
             </h2>
             <p className="text-xl text-gray-400">
-              Em 4 passos simples você tem sua lista de prospects
+              Em 4 passos simples você tem sua lista de leads
             </p>
           </div>
 
@@ -407,6 +404,11 @@ const HomePage: React.FC = () => {
           </div>
         </div>
 
+        {/* FAQ Section */}
+        <div className="py-16">
+          <FAQ />
+        </div>
+
         {/* CTA Section */}
         <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 py-16">
           <div className="max-w-4xl mx-auto px-6 text-center">
@@ -414,7 +416,7 @@ const HomePage: React.FC = () => {
               Pronto para Acelerar suas Vendas?
             </h2>
             <p className="text-xl text-gray-400 mb-8">
-              Comece hoje mesmo a prospectar de forma inteligente e eficiente
+              Comece hoje mesmo a captar leads de forma inteligente e eficiente
             </p>
             <div className="flex items-center justify-center gap-4">
               <button 

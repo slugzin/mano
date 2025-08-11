@@ -42,10 +42,10 @@ body {
 /* Linear-inspired Design System */
 @layer base {
   :root {
-    /* Paleta minimalista Prospect CRM */
-    --primary: 172 100% 40%; /* Teal #00A79D */
+    /* Paleta minimalista CaptaZap */
+    --primary: 260 84% 57%; /* Roxo #6366F1 - similar à landing */
     --primary-foreground: 0 0% 100%; /* Branco */
-    --accent: 172 100% 40%; /* Igual ao primary */
+    --accent: 260 84% 57%; /* Igual ao primary */
     --accent-foreground: 0 0% 100%;
     --background: 0 0% 99%; /* Branco quase puro */
     --background-secondary: 0 0% 97%;
@@ -65,14 +65,14 @@ body {
     --muted-foreground: 0 0% 45%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 10%;
-    --ring: 172 100% 40%;
+    --ring: 260 84% 57%;
     --input: 0 0% 89%;
   }
 
   .dark {
-    --primary: 172 100% 40%;
+    --primary: 260 84% 57%;
     --primary-foreground: 0 0% 100%;
-    --accent: 172 100% 40%;
+    --accent: 260 84% 57%;
     --accent-foreground: 0 0% 100%;
     --background: 0 0% 6%; /* Quase preto */
     --background-secondary: 0 0% 10%;
@@ -91,7 +91,7 @@ body {
     --muted-foreground: 0 0% 64%;
     --popover: 0 0% 10%;
     --popover-foreground: 0 0% 98%;
-    --ring: 172 100% 40%;
+    --ring: 260 84% 57%;
     --input: 0 0% 14%;
   }
 

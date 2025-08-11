@@ -707,160 +707,200 @@ const EmpresasPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Modal de Detalhes da Empresa (Mobile) */}
+        {/* Modal de Informações da Empresa - Design Minimalista Padronizado */}
         {empresaDetalhes && (
-          <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex md:hidden items-center justify-center p-4"
-            onClick={() => setEmpresaDetalhes(null)}
-          >
-            <div 
-              className="bg-background border border-border rounded-2xl w-full max-w-md animate-in fade-in duration-200"
-              onClick={e => e.stopPropagation()}
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 md:p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="bg-background border border-border rounded-xl w-full max-w-sm md:max-w-md max-h-[95vh] md:max-h-[80vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="flex items-start justify-between p-5 border-b border-border">
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">
-                    Detalhes da Empresa
-                  </h3>
+              <div className="p-3 md:p-4 border-b border-border bg-muted/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 md:gap-3">
+                    <div className="w-6 h-6 md:w-8 md:h-8 bg-accent/20 rounded-lg flex items-center justify-center">
+                      <Building size={14} className="text-accent md:w-4 md:h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs md:text-sm font-medium text-foreground">Informações da Empresa</h3>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setEmpresaDetalhes(null)}
+                    className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+                  >
+                    <X size={16} className="md:w-[18px] md:h-[18px]" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setEmpresaDetalhes(null)}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <X size={24} />
-                </button>
               </div>
 
               {/* Conteúdo */}
-              <div className="p-5 space-y-4">
+              <div className="p-3 md:p-4 space-y-3 md:space-y-4 max-h-[75vh] md:max-h-[60vh] overflow-y-auto">
                 {/* Nome da empresa */}
-                <div>
-                  <h4 className="text-lg font-semibold text-foreground leading-tight">
-                    {empresaDetalhes.empresa_nome}
-                  </h4>
-                  {empresaDetalhes.categoria && (
-                    <div className="inline-flex items-center px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium mt-2">
-                      {empresaDetalhes.categoria}
-                    </div>
-                  )}
-                </div>
-
-                {/* Rating */}
-                {empresaDetalhes.avaliacao && (
+                <div className="bg-muted/20 border border-border rounded-lg p-2 md:p-3">
                   <div className="flex items-center gap-2">
-                    <Star size={16} className="text-yellow-400 fill-yellow-400" />
-                    <span className="text-base font-medium text-foreground">
-                      {empresaDetalhes.avaliacao}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      ({empresaDetalhes.total_avaliacoes} avaliações)
-                    </span>
+                    <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-accent rounded-full flex-shrink-0"></div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] md:text-xs text-muted-foreground font-medium">Nome da Empresa</p>
+                      <p className="text-xs md:text-sm text-foreground font-medium leading-tight">{empresaDetalhes.empresa_nome}</p>
+                    </div>
                   </div>
-                )}
-
-                {/* Endereço */}
-                {empresaDetalhes.endereco && (
-                  <div className="flex items-start gap-3">
-                    <MapPin size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {empresaDetalhes.endereco}
-                    </p>
-                  </div>
-                )}
-
-                {/* Telefone */}
-                <div className="flex items-center justify-between p-3 bg-muted/20 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <Phone size={16} className="text-muted-foreground" />
-                    <span className="text-sm text-foreground font-medium">
-                      {empresaDetalhes.telefone || 'Não disponível'}
-                    </span>
-                  </div>
-                  {empresaDetalhes.telefone ? (
-                    <button
-                      onClick={() => window.open(`tel:${empresaDetalhes.telefone}`, '_self')}
-                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      Ligar
-                    </button>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      Não disponível
-                    </span>
-                  )}
                 </div>
+
+                {/* Badges de avaliação e posição */}
+                {(empresaDetalhes.posicao || empresaDetalhes.avaliacao) && (
+                  <div className="flex flex-wrap gap-1.5 md:gap-2">
+                    {empresaDetalhes.posicao && (
+                      <div className="bg-muted/20 px-1.5 md:px-2 py-0.5 md:py-1 rounded-md border border-border">
+                        <span className="text-[10px] md:text-xs text-foreground font-medium">Posição #{empresaDetalhes.posicao}</span>
+                      </div>
+                    )}
+                    {empresaDetalhes.avaliacao && (
+                      <div className="flex items-center gap-1 bg-muted/20 px-1.5 md:px-2 py-0.5 md:py-1 rounded-md border border-border">
+                        <Star size={10} className="text-yellow-400 fill-yellow-400 md:w-3 md:h-3" />
+                        <span className="text-[10px] md:text-xs text-foreground font-medium">
+                          {empresaDetalhes.avaliacao} ({empresaDetalhes.total_avaliacoes || 0})
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Website */}
-                <div className="flex items-center justify-between p-3 bg-muted/20 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <Globe size={16} className="text-muted-foreground" />
-                    <span className="text-sm text-foreground font-medium">
-                      Website
-                    </span>
+                {empresaDetalhes.website ? (
+                  <button 
+                    onClick={() => window.open(empresaDetalhes.website?.startsWith('http') ? empresaDetalhes.website : `https://${empresaDetalhes.website}`, '_blank')}
+                    className="w-full text-left p-2 md:p-3 bg-muted/20 hover:bg-accent/5 border border-border rounded-lg transition-colors group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Globe size={14} className="text-accent flex-shrink-0 md:w-4 md:h-4" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs md:text-sm text-foreground font-medium truncate">
+                          Visitar Website
+                        </p>
+                        <p className="text-[10px] md:text-xs text-muted-foreground truncate">{empresaDetalhes.website}</p>
+                      </div>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="w-full p-2 md:p-3 bg-muted/20 border border-border rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Globe size={14} className="text-muted-foreground flex-shrink-0 md:w-4 md:h-4" />
+                      <div>
+                        <p className="text-xs md:text-sm text-muted-foreground">Website não disponível</p>
+                        <p className="text-[10px] md:text-xs text-muted-foreground/70">Empresa sem site cadastrado</p>
+                      </div>
+                    </div>
                   </div>
-                  {empresaDetalhes.website ? (
-                    <button
-                      onClick={() => window.open(empresaDetalhes.website, '_blank')}
-                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      Visitar
-                    </button>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      Não disponível
-                    </span>
-                  )}
-                </div>
+                )}
 
-                {/* Status atual e botão para alterar */}
-                <div className="pt-4 border-t border-border">
-                  <div className="p-3 bg-primary/5 rounded-xl border border-primary/10">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 ${statusColors[empresaDetalhes.status as keyof typeof statusColors].bg} ${statusColors[empresaDetalhes.status as keyof typeof statusColors].border} border rounded-lg flex items-center justify-center`}>
-                          {React.createElement(statusColors[empresaDetalhes.status as keyof typeof statusColors].icon, {
-                            size: 16,
-                            className: statusColors[empresaDetalhes.status as keyof typeof statusColors].text
-                          })}
+                {/* Informações adicionais - Grid organizado para desktop */}
+                <div className="space-y-2 md:space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
+                    {empresaDetalhes.categoria && (
+                      <div className="bg-muted/20 border border-border rounded-lg p-2 md:p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-accent rounded-full flex-shrink-0"></div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] md:text-xs text-muted-foreground font-medium">Categoria</p>
+                            <p className="text-xs md:text-sm text-foreground font-medium leading-tight">{empresaDetalhes.categoria}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            Status atual
-                          </p>
-                          <p className={`text-sm ${statusColors[empresaDetalhes.status as keyof typeof statusColors].text} font-medium`}>
-                            {statusLabels[empresaDetalhes.status as keyof typeof statusLabels]}
-                          </p>
+                      </div>
+                    )}
+
+                    {empresaDetalhes.telefone && (
+                      <div className="bg-muted/20 border border-border rounded-lg p-2 md:p-3">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full flex-shrink-0 ${empresaDetalhes.tem_whatsapp ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] md:text-xs text-muted-foreground font-medium">{empresaDetalhes.tem_whatsapp ? 'WhatsApp' : 'Telefone'}</p>
+                            <p className="text-xs md:text-sm text-foreground font-medium leading-tight">{empresaDetalhes.telefone}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {empresaDetalhes.endereco && (
+                    <div className="bg-muted/20 border border-border rounded-lg p-2 md:p-3">
+                      <div className="flex items-start gap-2">
+                        <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-accent rounded-full mt-1 md:mt-1.5 flex-shrink-0"></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] md:text-xs text-muted-foreground font-medium">Localização</p>
+                          <p className="text-xs md:text-sm text-foreground font-medium leading-tight md:leading-relaxed">{empresaDetalhes.endereco}</p>
                         </div>
                       </div>
                     </div>
+                  )}
+
+                  {/* Status */}
+                  <div className="bg-muted/20 border border-border rounded-lg p-2 md:p-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] md:text-xs text-muted-foreground font-medium">Status</p>
+                        <p className="text-xs md:text-sm text-foreground font-medium leading-tight">
+                          {empresaDetalhes.status?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Não definido'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Botões de Ação */}
+                <div className="pt-3 md:pt-4 space-y-2 md:space-y-3">
+                  {/* Botão Disparar (apenas se tem WhatsApp) */}
+                  {empresaDetalhes.tem_whatsapp && (
+                    <button
+                      onClick={() => {
+                        setEmpresaDetalhes(null);
+                        // Navegar para disparos com empresa pré-selecionada
+                        navigate('/admin/disparos', { 
+                          state: { 
+                            empresaPreSelecionada: empresaDetalhes 
+                          } 
+                        });
+                      }}
+                      className="w-full p-2 md:p-3 bg-accent hover:bg-accent/90 text-accent-foreground rounded-lg transition-colors font-medium flex items-center gap-2 justify-center border-2 border-purple-500 hover:border-purple-600"
+                    >
+                      <Rocket size={14} className="md:w-4 md:h-4" />
+                      <span className="text-xs md:text-sm">Disparar para esta Empresa</span>
+                    </button>
+                  )}
+
+                  {/* Botão Alterar Status - Apenas Mobile */}
+                  <div className="md:hidden">
                     <button
                       onClick={() => {
                         setEmpresaDetalhes(null);
                         setEmpresaSelecionada(empresaDetalhes);
                       }}
-                      className="w-full px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium transition-colors"
+                      className="w-full p-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors font-medium flex items-center gap-2 justify-center border-2 border-purple-500 hover:border-purple-600"
                     >
-                      Alterar Status
+                      <CheckCircle size={14} />
+                      <span className="text-xs">Alterar Status</span>
                     </button>
                   </div>
-                </div>
-
-                {/* Botão Excluir Empresa */}
-                <div className="pt-4 border-t border-border">
+                  
+                  {/* Botão Excluir Empresa */}
                   <button
                     onClick={() => {
                       setEmpresaDetalhes(null);
                       setEmpresaParaExcluir(empresaDetalhes);
                     }}
-                    className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                    className="w-full p-2 md:p-3 bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg transition-colors font-medium flex items-center gap-2 justify-center border-2 border-purple-500 hover:border-purple-600"
                   >
-                    <Trash2 size={16} />
-                    Excluir Empresa
+                    <Trash2 size={14} className="md:w-4 md:h-4" />
+                    <span className="text-xs md:text-sm">Excluir Empresa</span>
                   </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>
         )}
 
@@ -938,62 +978,54 @@ const EmpresasPage: React.FC = () => {
             icon={<Building size={32} className="text-primary" />}
           />
           
-          {/* KPIs */}
+          {/* KPIs - minimalistas com acento roxo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                  <Building size={20} className="text-emerald-500" />
-                </div>
+            <div className="bg-white dark:bg-card border border-gray-200 dark:border-border rounded-xl p-4 hover:border-accent/50 hover:shadow-sm transition-all duration-200 shadow-sm">
+              <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-2xl font-bold text-emerald-500">{empresasFiltradas.length}</span>
-                  <span className="text-xs text-muted-foreground ml-2">total</span>
+                  <p className="text-xs text-gray-600 dark:text-muted-foreground mb-1">Total de Empresas</p>
+                  <span className="text-2xl font-semibold text-gray-900 dark:text-foreground">{empresasFiltradas.length}</span>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-accent/15 dark:bg-accent/10 flex items-center justify-center">
+                  <Building size={18} className="text-accent" />
                 </div>
               </div>
-              <h3 className="text-sm font-medium text-foreground">Total de Empresas</h3>
-              <p className="text-xs text-muted-foreground mt-1">Empresas cadastradas</p>
             </div>
 
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                  <Globe size={20} className="text-blue-500" />
-                </div>
+            <div className="bg-white dark:bg-card border border-gray-200 dark:border-border rounded-xl p-4 hover:border-accent/50 hover:shadow-sm transition-all duration-200 shadow-sm">
+              <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-2xl font-bold text-blue-500">{totalComWebsite}</span>
-                  <span className="text-xs text-muted-foreground ml-2">sites</span>
+                  <p className="text-xs text-gray-600 dark:text-muted-foreground mb-1">Com Website</p>
+                  <span className="text-2xl font-semibold text-gray-900 dark:text-foreground">{totalComWebsite}</span>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-accent/15 dark:bg-accent/10 flex items-center justify-center">
+                  <Globe size={18} className="text-accent" />
                 </div>
               </div>
-              <h3 className="text-sm font-medium text-foreground">Com Website</h3>
-              <p className="text-xs text-muted-foreground mt-1">Empresas com site</p>
             </div>
 
-            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
-                  <Phone size={20} className="text-green-500" />
-                </div>
+            <div className="bg-white dark:bg-card border border-gray-200 dark:border-border rounded-xl p-4 hover:border-accent/50 hover:shadow-sm transition-all duration-200 shadow-sm">
+              <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-2xl font-bold text-green-500">{totalComWhatsApp}</span>
-                  <span className="text-xs text-muted-foreground ml-2">contatos</span>
+                  <p className="text-xs text-gray-600 dark:text-muted-foreground mb-1">Com WhatsApp</p>
+                  <span className="text-2xl font-semibold text-gray-900 dark:text-foreground">{totalComWhatsApp}</span>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-accent/15 dark:bg-accent/10 flex items-center justify-center">
+                  <Phone size={18} className="text-accent" />
                 </div>
               </div>
-              <h3 className="text-sm font-medium text-foreground">Com WhatsApp</h3>
-              <p className="text-xs text-muted-foreground mt-1">Empresas com WhatsApp</p>
             </div>
 
-            <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                  <MapPin size={20} className="text-purple-500" />
-                </div>
+            <div className="bg-white dark:bg-card border border-gray-200 dark:border-border rounded-xl p-4 hover:border-accent/50 hover:shadow-sm transition-all duration-200 shadow-sm">
+              <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-2xl font-bold text-purple-500">{cidades.length}</span>
-                  <span className="text-xs text-muted-foreground ml-2">cidades</span>
+                  <p className="text-xs text-gray-600 dark:text-muted-foreground mb-1">Cidades</p>
+                  <span className="text-2xl font-semibold text-gray-900 dark:text-foreground">{cidades.length}</span>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-accent/15 dark:bg-accent/10 flex items-center justify-center">
+                  <MapPin size={18} className="text-accent" />
                 </div>
               </div>
-              <h3 className="text-sm font-medium text-foreground">Cidades</h3>
-              <p className="text-xs text-muted-foreground mt-1">Regiões atendidas</p>
             </div>
           </div>
 
@@ -1011,154 +1043,7 @@ const EmpresasPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal de Detalhes da Empresa (Desktop) */}
-      {empresaDetalhes && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 hidden md:flex">
-          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200 dark:border-gray-700 transform transition-all duration-200">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Detalhes da Empresa</h2>
-              <button
-                onClick={() => setEmpresaDetalhes(null)}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                <X size={20} className="text-gray-500 dark:text-gray-400" />
-              </button>
-            </div>
 
-            {/* Content */}
-            <div className="p-6 space-y-6">
-              {/* Nome da Empresa */}
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">{empresaDetalhes.empresa_nome}</h3>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm rounded-full font-medium">
-                    {empresaDetalhes.categoria || 'Sem categoria'}
-                  </span>
-                  {empresaDetalhes.tem_whatsapp && (
-                    <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-sm rounded-full font-medium flex items-center gap-1">
-                      📱 WhatsApp Ativo
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Informações Principais */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Avaliação */}
-                {empresaDetalhes.avaliacao && (
-                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Star size={16} className="text-yellow-500" />
-                      <span className="text-gray-900 dark:text-white font-semibold">{empresaDetalhes.avaliacao}</span>
-                    </div>
-                    {empresaDetalhes.total_avaliacoes > 0 && (
-                      <span className="text-gray-500 dark:text-gray-400 text-sm">
-                        {empresaDetalhes.total_avaliacoes} {empresaDetalhes.total_avaliacoes === 1 ? 'avaliação' : 'avaliações'}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Endereço */}
-                {empresaDetalhes.endereco && (
-                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                    <div className="flex items-start gap-2">
-                      <MapPin size={16} className="text-gray-500 dark:text-gray-400 mt-0.5 flex-shrink-0" />
-                      <span className="text-gray-600 dark:text-gray-400 text-sm">{empresaDetalhes.endereco}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Contatos */}
-              <div className="space-y-3">
-                {/* Telefone */}
-                {empresaDetalhes.telefone && (
-                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                    <div className="flex items-center gap-2">
-                      <Phone size={16} className="text-green-500" />
-                      <span className="text-gray-900 dark:text-white font-medium">{empresaDetalhes.telefone}</span>
-                    </div>
-                    <a
-                      href={`tel:${empresaDetalhes.telefone}`}
-                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm rounded-lg transition-colors font-medium"
-                    >
-                      Ligar
-                    </a>
-                  </div>
-                )}
-
-                {/* Website */}
-                {empresaDetalhes.website && (
-                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                    <div className="flex items-center gap-2">
-                      <Globe size={16} className="text-blue-500" />
-                      <span className="text-gray-900 dark:text-white font-medium">Website</span>
-                    </div>
-                    <a
-                      href={empresaDetalhes.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-colors font-medium"
-                    >
-                      Visitar
-                    </a>
-                  </div>
-                )}
-
-                {/* Links de Agendamento */}
-                {empresaDetalhes.links_agendamento && (
-                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                    <div className="flex items-center gap-2">
-                      <Calendar size={16} className="text-purple-500" />
-                      <span className="text-gray-900 dark:text-white font-medium">Agendamento</span>
-                    </div>
-                    <a
-                      href={empresaDetalhes.links_agendamento}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors font-medium"
-                    >
-                      Agendar
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              {/* Botões de Ação */}
-              <div className="pt-6 border-t border-gray-200 dark:border-gray-700 space-y-3">
-                {/* Botão Ir para Disparos (apenas se tem WhatsApp) */}
-                {empresaDetalhes.tem_whatsapp && (
-                  <button
-                    onClick={() => {
-                      setEmpresaDetalhes(null);
-                      // Redirecionar para disparos
-                      navigate('/admin/disparos');
-                    }}
-                    className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-base font-semibold transition-all duration-200 flex items-center justify-center gap-3 transform hover:scale-[1.02]"
-                  >
-                    <Rocket size={16} />
-                    Ir para Disparos
-                  </button>
-                )}
-                
-                {/* Botão Excluir Empresa */}
-                <button
-                  onClick={() => {
-                    setEmpresaDetalhes(null);
-                    setEmpresaParaExcluir(empresaDetalhes);
-                  }}
-                  className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg text-base font-semibold transition-all duration-200 flex items-center justify-center gap-3 transform hover:scale-[1.02]"
-                >
-                  <Trash2 size={16} />
-                  Excluir Empresa
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal de Confirmação de Exclusão */}
       {empresaParaExcluir && (

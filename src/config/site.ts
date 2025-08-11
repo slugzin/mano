@@ -1,18 +1,10 @@
-// Configurações do site
-export const SITE_CONFIG = {
-  // Informações do site
-  SITE_NAME: 'Prospect CRM',
-  SITE_DESCRIPTION: 'Plataforma de lead generation e automação de mensagens WhatsApp',
-  
-  // URLs importantes
-  ADMIN_PATH: '/admin',
-  
-  // Configurações de funcionalidades
-  FEATURES: {
-    LEAD_SEARCH: true,
-    WHATSAPP_INTEGRATION: true,
-    VISUAL_CRM: true,
-    CAMPAIGNS: true,
-    ANALYTICS: true
-  }
-}; 
+export const siteConfig = {
+  name: "CaptaZap",
+  description: "Capture empresas e dispare no WhatsApp automaticamente",
+  url: "https://captazap.com.br",
+  ogImage: "https://captazap.com.br/og.jpg",
+  links: {
+    twitter: "https://twitter.com/captazap",
+    github: "https://github.com/captazap",
+  },
+} 

@@ -8,11 +8,11 @@ const CampanhasPage: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Ativa': return 'from-green-500 to-emerald-500';
-      case 'Pausada': return 'from-yellow-500 to-orange-500';
-      case 'Concluída': return 'from-blue-500 to-cyan-500';
-      case 'Rascunho': return 'from-gray-500 to-gray-600';
-      default: return 'from-gray-500 to-gray-600';
+      case 'Ativa': return 'from-green-800 to-emerald-800';
+      case 'Pausada': return 'from-yellow-800 to-orange-800';
+      case 'Concluída': return 'from-blue-800 to-cyan-800';
+      case 'Rascunho': return 'from-gray-700 to-gray-800';
+      default: return 'from-gray-700 to-gray-800';
     }
   };
 

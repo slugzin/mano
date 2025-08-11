@@ -80,7 +80,8 @@ export const UserProviderSimple: React.FC<{ children: ReactNode }> = ({ children
       
       const deviceId = getDeviceId();
       
-      const { data, error } = await supabase.rpc('create_or_get_user', {
+      // Tentar função principal primeiro
+      let { data, error } = await supabase.rpc('create_or_get_user', {
         p_name: userData.name,
         p_email: userData.email,
         p_phone: userData.phone,
@@ -88,9 +89,41 @@ export const UserProviderSimple: React.FC<{ children: ReactNode }> = ({ children
         p_cpf: userData.cpf
       });
 
+      // Se der erro, tentar função alternativa
+      if (error) {
+        console.warn('⚠️ [SIMPLE] Erro na função principal, tentando alternativa:', error);
+        
+        const fallbackResult = await supabase.rpc('simple_create_user', {
+          p_name: userData.name,
+          p_email: userData.email,
+          p_phone: userData.phone,
+          p_device_id: deviceId,
+          p_cpf: userData.cpf
+        });
+        
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+      }
+
       if (error) {
         console.error('❌ [SIMPLE] Erro no Supabase:', error);
-        return { success: false, error: 'Erro ao processar cadastro' };
+        
+        // Criar usuário localmente como último recurso
+        const localUser = {
+          id: crypto.randomUUID(),
+          name: userData.name,
+          email: userData.email,
+          phone: userData.phone,
+          cpf: userData.cpf,
+          device_id: deviceId,
+          created_at: new Date().toISOString()
+        };
+        
+        setUser(localUser);
+        localStorage.setItem('user_data', JSON.stringify(localUser));
+        console.log('⚠️ [SIMPLE] Usuário criado localmente:', localUser);
+        
+        return { success: true, warning: 'Usuário criado localmente. Alguns recursos podem ser limitados.' };
       }
 
       if (data?.success) {
@@ -100,7 +133,8 @@ export const UserProviderSimple: React.FC<{ children: ReactNode }> = ({ children
         console.log('✅ [SIMPLE] Usuário criado:', newUser);
         return { success: true };
       } else {
-        return { success: false, error: 'Erro inesperado no cadastro' };
+        console.error('❌ [SIMPLE] Resposta inválida:', data);
+        return { success: false, error: data?.error || 'Erro inesperado no cadastro' };
       }
       
     } catch (error) {

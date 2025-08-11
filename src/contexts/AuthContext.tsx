@@ -184,30 +184,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
-      console.log('📝 Tentando fazer cadastro...');
+      console.log('📝 Tentando fazer cadastro...', { email, fullName });
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            full_name: fullName
+            full_name: fullName,
+            name: fullName
           }
         }
       });
 
+      console.log('📝 Resultado do signup:', { data, error });
+
       if (error) {
         console.error('❌ Erro no cadastro:', error);
-        return { error };
+        
+        // Tratar erros específicos do Supabase
+        let errorMessage = error.message;
+        
+        if (error.message.includes('Database error saving new user')) {
+          errorMessage = 'Erro interno do servidor. Tente novamente em alguns instantes.';
+        } else if (error.message.includes('User already registered')) {
+          errorMessage = 'Este email já está cadastrado. Faça login ou recupere sua senha.';
+        } else if (error.message.includes('Invalid email')) {
+          errorMessage = 'Email inválido. Verifique o formato do email.';
+        } else if (error.message.includes('Password should be at least')) {
+          errorMessage = 'A senha deve ter pelo menos 6 caracteres.';
+        }
+        
+        return { error: { ...error, message: errorMessage } };
       }
 
       if (data.user) {
-        console.log('✅ Cadastro realizado com sucesso');
+        console.log('✅ Cadastro realizado com sucesso:', data.user);
+        
+        // Se o usuário foi criado mas não confirmado, ainda é sucesso
+        if (!data.user.email_confirmed_at) {
+          console.log('📧 Email de confirmação enviado para:', email);
+        }
       }
 
       return { error: null };
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erro geral no cadastro:', error);
-      return { error };
+      return { 
+        error: { 
+          message: error.message || 'Erro inesperado ao criar conta. Tente novamente.',
+          __isRetryable: true
+        } 
+      };
     }
   };
 

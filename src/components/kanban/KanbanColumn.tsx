@@ -28,7 +28,7 @@ export function KanbanColumn({ column, onDisparar, onAbrirDetalhes, isOver, minW
       <div className={`
         p-3 md:p-4 rounded-t-xl bg-gradient-to-r ${column.color} shadow-sm
         transition-all duration-300
-        ${isOver ? 'shadow-lg shadow-accent/20' : ''}
+        ${isOver ? 'shadow-md shadow-accent/10' : ''}
       `}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

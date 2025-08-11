@@ -25,6 +25,7 @@ import {
 import { FileText, Timer, MessageSquare, ArrowRight, ArrowUp, ArrowDown, Info } from 'lucide-react';
 import PageHeader from '../../components/ui/PageHeader';
 import { supabase } from '../../lib/supabase';
+import { usePlanLimits } from '../../contexts/PlanLimitsContext';
 import { 
   VARIAVEIS_DISPONIVEIS, 
   detectarVariaveis, 
@@ -75,6 +76,7 @@ interface Template {
 }
 
 const FluxosPage: React.FC = () => {
+  const { canPerformAction, getRemainingLimit, setShowUpgradeModal, setUpgradeReason, refreshLimits } = usePlanLimits();
   const [activeTab, setActiveTab] = useState<'templates' | 'fluxos'>('fluxos');
   
 
@@ -217,6 +219,13 @@ const FluxosPage: React.FC = () => {
 
   const handleSaveTemplate = async () => {
     try {
+      // Verificar limites do plano (apenas para novos templates)
+      if (!editingTemplate && !(await canPerformAction('criar_template', 1))) {
+        setUpgradeReason('Limite de templates atingido (1 máximo). Fale no WhatsApp para fazer upgrade com desconto exclusivo!');
+        setShowUpgradeModal(true);
+        return;
+      }
+
       // Pegar o usuário atual
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) {
@@ -257,6 +266,9 @@ const FluxosPage: React.FC = () => {
       setShowTemplateModal(false);
       resetTemplateForm();
       await loadData();
+      
+      // Atualizar limites após salvar template com sucesso
+      await refreshLimits();
     } catch (error) {
       console.error('Erro ao salvar template:', error);
       alert('Erro ao salvar template. Verifique o console para mais detalhes.');
@@ -466,28 +478,29 @@ const FluxosPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header Mobile */}
-      <div className="md:hidden bg-card border-b border-border p-4">
+      <div className="md:hidden border-b border-border bg-background p-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
             <BarChart3 size={20} className="text-accent" />
           </div>
           <div>
-            <h1 className="text-lg font-medium text-foreground">Fluxos</h1>
+            <h1 className="text-lg font-medium text-foreground">Fluxos CaptaZap</h1>
             <p className="text-xs text-muted-foreground">Gerencie templates e fluxos</p>
           </div>
         </div>
       </div>
 
-      {/* Header Desktop */}
-      <div className="hidden md:block">
-        <PageHeader
-          title="Fluxos de Mensagens"
-          subtitle="Crie e gerencie templates e fluxos automáticos"
-          icon={<BarChart3 size={24} className="text-accent" />}
-        />
-      </div>
+      <div className="max-w-7xl mx-auto">
+        {/* Header Desktop */}
+        <div className="hidden md:block">
+          <PageHeader
+            title="Fluxos CaptaZap"
+            subtitle="Crie e gerencie templates e fluxos automáticos"
+            icon={<BarChart3 size={24} className="text-accent" />}
+          />
+        </div>
 
-      <div className="p-4 md:p-6 max-w-7xl mx-auto">
+        <div className="p-4 md:p-6">
         {/* Tabs */}
         <div className="flex mb-6 bg-muted/20 rounded-lg p-1">
           <button
@@ -559,7 +572,7 @@ const FluxosPage: React.FC = () => {
                 {messageTemplates.map((template) => (
                   <div
                     key={template.id}
-                    className="bg-card border border-border rounded-xl p-4 hover:border-accent/30 transition-colors"
+                    className="bg-card border-2 border-border hover:border-accent/50 rounded-xl p-4 transition-colors shadow-sm hover:shadow-md"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
@@ -668,7 +681,7 @@ const FluxosPage: React.FC = () => {
                   const isExpanded = expandedFluxo === fluxo.id;
                   
                   return (
-                    <div key={fluxo.id} className="bg-card border border-border rounded-xl overflow-hidden">
+                    <div key={fluxo.id} className="bg-card border-2 border-border hover:border-accent/50 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
                       {/* Header do Fluxo (Sempre Visível) */}
                       <div 
                         className="p-4 cursor-pointer hover:bg-accent/5 transition-colors"
@@ -762,7 +775,7 @@ const FluxosPage: React.FC = () => {
                                   const fasesFrases = fluxoFrases.filter(f => f.fase === fase).sort((a, b) => a.ordem - b.ordem);
                                   
                                   return (
-                                    <div key={fase} className="bg-background border border-border rounded-lg p-4">
+                                    <div key={fase} className="bg-background border-2 border-border hover:border-accent/30 rounded-lg p-4 transition-colors">
                                       <div className="flex items-center justify-between mb-4">
                                         <div className="flex items-center gap-2">
                                           <div className="w-6 h-6 bg-accent/10 rounded-lg flex items-center justify-center">
@@ -908,8 +921,8 @@ const FluxosPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={templateForm.nome}
-                    onChange={(e) => setTemplateForm({ ...templateForm, nome: e.target.value })}
+                    value={templateForm.name}
+                    onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
                     className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-accent text-sm"
                     placeholder="Ex: Primeiro Contato"
                   />
@@ -920,8 +933,8 @@ const FluxosPage: React.FC = () => {
                     Descrição
                   </label>
                   <textarea
-                    value={templateForm.descricao}
-                    onChange={(e) => setTemplateForm({ ...templateForm, descricao: e.target.value })}
+                    value={templateForm.content}
+                    onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })}
                     className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-accent text-sm resize-none"
                     rows={3}
                     placeholder="Descreva o objetivo deste template..."
@@ -1370,6 +1383,7 @@ const FluxosPage: React.FC = () => {
           </div>
         </div>
       )}
+      </div> {/* Fechamento da div max-w-7xl mx-auto */}
     </div>
   );
 };

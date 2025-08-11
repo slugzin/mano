@@ -3,6 +3,14 @@ name = "prospect-crm"
 
 [auth]
 enabled = true
+# Enable signup
+enable_signup = true
+# Disable email confirmation for development
+enable_confirmations = false
+# Allow anonymous users
+enable_anonymous_sign_ins = false
+# Double confirm before signup
+enable_double_confirm_email = false
 
 [functions]
 enabled = true

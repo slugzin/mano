@@ -92,7 +92,7 @@ const SettingsPage: React.FC = () => {
   const [vipOffers, setVipOffers] = useState<VipOffer[]>([]);
   const [gateways, setGateways] = useState<PaymentGateway[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'plans' | 'calls' | 'vip' | 'gateways' | 'tests'>('plans');
+  const [activeTab, setActiveTab] = useState<'calls' | 'vip' | 'gateways' | 'tests'>('calls');
   const [editingPlan, setEditingPlan] = useState<string | null>(null);
   const [editingCallPlan, setEditingCallPlan] = useState<string | null>(null);
   const [editingVipOffer, setEditingVipOffer] = useState<string | null>(null);
@@ -827,7 +827,7 @@ Dias restantes: ${data.days_remaining}
         <div className="bg-card border border-border rounded-xl p-1 mb-8">
           <div className="flex space-x-1">
             {[
-              { id: 'plans', label: 'Planos', icon: Crown },
+              // { id: 'plans', label: 'Planos', icon: Crown },
               { id: 'calls', label: 'Chamadas', icon: PhoneCall },
               { id: 'vip', label: 'Ofertas VIP', icon: Star },
               { id: 'gateways', label: 'Pagamentos', icon: CreditCard },
