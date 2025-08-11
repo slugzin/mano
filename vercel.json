@@ -36,9 +36,5 @@
       ]
     }
   ],
-  "functions": {
-    "supabase/functions/**/*.ts": {
-      "runtime": "nodejs18.x"
-    }
-  }
+
 } 
