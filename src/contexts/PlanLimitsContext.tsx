@@ -39,7 +39,7 @@ const PlanLimitsContext = createContext<PlanLimitsContextType | undefined>(undef
 
 // Limites padrão para plano gratuito
 const FREE_PLAN_LIMITS = {
-  maxEmpresas: 30,
+  maxEmpresas: 20,
   maxDisparos: 15,
   maxConexoes: 1,
   maxTemplates: 1,
@@ -89,7 +89,7 @@ export const PlanLimitsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       if (data) {
         setLimits({
-          maxEmpresas: data.max_empresas || 30,
+          maxEmpresas: data.max_empresas || 20,
           maxDisparos: data.max_disparos || 15,
           maxConexoes: data.max_conexoes || 1,
           maxTemplates: data.max_templates || 1,

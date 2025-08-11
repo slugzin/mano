@@ -48,22 +48,22 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, reason, re
         >
           {/* Header */}
           <div className="relative">
-            <div className="bg-gray-50 dark:bg-gray-800 p-4 border-b border-border">
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/30 dark:to-blue-900/30 p-6 border-b border-purple-200 dark:border-purple-700">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                    <Crown size={20} className="text-purple-600 dark:text-purple-400" />
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg">
+                    <Crown size={24} className="text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-foreground">Limite Atingido</h3>
-                    <p className="text-sm text-muted-foreground">Plano gratuito</p>
+                    <h3 className="text-xl font-bold text-purple-800 dark:text-purple-200">🚀 Upgrade Disponível!</h3>
+                    <p className="text-sm text-purple-600 dark:text-purple-300">Desbloqueie todo o potencial do CaptaZap</p>
                   </div>
                 </div>
                 <button
                   onClick={onClose}
-                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all duration-200"
+                  className="p-2 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-xl transition-all duration-200"
                 >
-                  <X size={18} />
+                  <X size={20} />
                 </button>
               </div>
             </div>
@@ -103,31 +103,48 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, reason, re
                   </p>
                 </div>
 
-                {/* Current limits */}
-                {remaining && (
-                  <div className="bg-gray-50/50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                    <h4 className="text-sm font-medium text-foreground mb-2">📊 Seus limites restantes:</h4>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-2 border border-gray-200 dark:border-gray-700">
-                        <span className="text-muted-foreground">Empresas:</span>
-                        <span className="font-semibold text-[#512FEB] dark:text-purple-400 ml-1">{remaining.empresas}</span>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-2 border border-gray-200 dark:border-gray-700">
-                        <span className="text-muted-foreground">Disparos:</span>
-                        <span className="font-semibold text-[#512FEB] dark:text-purple-400 ml-1">{remaining.disparos}</span>
-                      </div>
+                {/* Upgrade Benefits */}
+                <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border border-purple-200 dark:border-purple-700 rounded-xl p-4">
+                  <h4 className="text-sm font-semibold text-purple-800 dark:text-purple-200 mb-3 flex items-center gap-2">
+                    <span className="text-lg">🚀</span>
+                    Upgrade para Premium
+                  </h4>
+                  <div className="space-y-2 text-xs text-purple-700 dark:text-purple-300">
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600">✓</span>
+                      <span>Empresas ilimitadas</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600">✓</span>
+                      <span>Disparos ilimitados</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600">✓</span>
+                      <span>Múltiplas conexões WhatsApp</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600">✓</span>
+                      <span>Templates ilimitados</span>
                     </div>
                   </div>
-                )}
+                </div>
 
                 {/* CTA */}
-                <button
-                  onClick={handleUpgrade}
-                  className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-lg"
-                >
-                  <ExternalLink size={16} />
-                  💬 Falar no WhatsApp
-                </button>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleUpgrade}
+                    className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-4 px-6 rounded-xl font-semibold flex items-center justify-center gap-3 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
+                  >
+                    <ExternalLink size={18} />
+                    <span className="text-base">💬 Falar no WhatsApp</span>
+                  </button>
+                  
+                  <div className="text-center">
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      <span className="font-medium">🎁 Desconto exclusivo</span> para novos usuários!
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -145,23 +162,23 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, reason, re
                   />
                 </div>
 
-                <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Gift size={14} className="text-[#512FEB]" />
-                    <span className="text-sm font-medium text-foreground">Recompensa por Feedback</span>
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border border-yellow-200 dark:border-yellow-700 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Gift size={16} className="text-yellow-600" />
+                    <span className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">🎁 Recompensa por Feedback</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Feedbacks úteis podem ganhar bônus extras no seu plano!
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                    Feedbacks úteis podem ganhar <span className="font-medium">bônus extras</span> no seu plano!
                   </p>
                 </div>
 
                 <button
                   onClick={handleFeedback}
                   disabled={!feedback.trim()}
-                  className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-400 disabled:to-gray-500 text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-lg disabled:cursor-not-allowed"
+                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 text-white py-4 px-6 rounded-xl font-semibold flex items-center justify-center gap-3 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:transform-none"
                 >
-                  <MessageCircle size={16} />
-                  💬 Enviar no WhatsApp
+                  <MessageCircle size={18} />
+                  <span className="text-base">💬 Enviar no WhatsApp</span>
                 </button>
               </div>
             )}
