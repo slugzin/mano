@@ -556,16 +556,6 @@ const LoginPage: React.FC = () => {
           <div className="w-full max-w-sm sm:max-w-md mx-auto">
             {/* Logo/Header */}
             <div className="text-center mb-6 sm:mb-8">
-              {/* Logo CaptaZap */}
-              <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-r from-purple-600 to-purple-800 rounded-2xl mb-4 sm:mb-6 shadow-2xl">
-                <div className="grid grid-cols-2 gap-1 w-8 h-8 sm:w-10 sm:h-10">
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-sm"></div>
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-sm"></div>
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-sm"></div>
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-sm"></div>
-                </div>
-              </div>
-              
               {/* Tag de marca */}
               <div className="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2 bg-black/40 border border-white/20 rounded-full mb-3 sm:mb-4">
                 <div className="w-2 h-2 sm:w-3 sm:h-3 bg-purple-500 rounded-sm mr-2"></div>
@@ -706,16 +696,6 @@ const LoginPage: React.FC = () => {
         <div className="w-full max-w-md mx-auto">
           {/* Logo/Header */}
           <div className="text-center mb-6 sm:mb-8">
-            {/* Logo CaptaZap */}
-            <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-gradient-to-r from-purple-600 to-purple-800 rounded-2xl mb-3 sm:mb-4 md:mb-6 shadow-2xl">
-              <div className="grid grid-cols-2 gap-1 w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10">
-                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 bg-white rounded-sm"></div>
-                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 bg-white rounded-sm"></div>
-                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 bg-white rounded-sm"></div>
-                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 bg-white rounded-sm"></div>
-              </div>
-            </div>
-            
             {/* Tag de marca */}
             <div className="inline-flex items-center px-2 py-1.5 sm:px-3 sm:py-2 md:px-4 md:py-2 bg-black/40 border border-white/20 rounded-full mb-2 sm:mb-3 md:mb-4">
               <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 md:w-3 md:h-3 bg-purple-500 rounded-sm mr-1.5 sm:mr-2"></div>
