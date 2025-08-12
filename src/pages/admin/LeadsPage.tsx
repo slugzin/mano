@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Building, MapPin, Globe, ChevronDown, Search, Target, Phone, Save, MessageCircle, X, Play, CheckCircle } from '../../utils/icons';
+import { Building, MapPin, Globe, ChevronDown, Search, Target, Phone, Save, MessageCircle, X, Play, CheckCircle, Lock } from '../../utils/icons';
 import { captarEmpresas, buscarLocalizacoes, salvarEmpresas, type Empresa } from '../../services/edgeFunctions';
 import FiltrosAtivosBanner from '../../components/ui/FiltrosAtivosBanner';
 import PageHeader from '../../components/ui/PageHeader';
@@ -27,6 +27,7 @@ const LeadsPage: React.FC = () => {
     quantidadeEmpresas: 10
   });
 
+  // Modificar as opções de quantidade para mostrar apenas 10 e 20 para plano gratuito
   const quantidadeOpcoes = [10, 20, 30, 50, 100, 500, 1000];
   
   const [loading, setLoading] = useState(false);
@@ -151,15 +152,23 @@ const LeadsPage: React.FC = () => {
       return;
     }
 
-    // Garantir que a quantidade seja pelo menos 10
+    // Verificar se a quantidade requer upgrade
+    if (currentQuantityRequiresUpgrade()) {
+      setUpgradeReason(`Para buscar ${formData.quantidadeEmpresas} empresas, entre em contato via WhatsApp para adquirir um plano Premium.`);
+      setShowUpgradeModal(true);
+      return;
+    }
+
+    // Garantir que a quantidade seja pelo menos 10 e não exceda 20 para plano gratuito
     let quantidadeFinal = Math.max(formData.quantidadeEmpresas || 10, 10);
+    quantidadeFinal = Math.min(quantidadeFinal, 20); // Limitar a 20 para plano gratuito
     
     // Verificar limites do plano
     const remainingEmpresas = getRemainingLimit('empresas');
     
     if (!(await canPerformAction('buscar_empresas', quantidadeFinal))) {
       if (remainingEmpresas === 0) {
-        setUpgradeReason('Limite de empresas atingido. Fale no WhatsApp para fazer upgrade com desconto exclusivo!');
+        setUpgradeReason('Limite de empresas atingido. Entre em contato via WhatsApp para adquirir um plano Premium.');
         setShowUpgradeModal(true);
         return;
       } else {
@@ -172,6 +181,7 @@ const LeadsPage: React.FC = () => {
         return;
       }
     }
+    
     const dadosBusca = {
       ...formData,
       quantidadeEmpresas: quantidadeFinal
@@ -439,6 +449,41 @@ const LeadsPage: React.FC = () => {
     }
   };
 
+  // Função para verificar se uma quantidade requer upgrade
+  const requiresUpgrade = (quantidade: number): boolean => {
+    return quantidade > 20;
+  };
+
+  // Função para lidar com clique em opção premium
+  const handlePremiumOptionClick = (quantidade: number) => {
+    if (requiresUpgrade(quantidade)) {
+      setUpgradeReason(`Para buscar ${quantidade} empresas, faça upgrade para o plano Premium e tenha acesso ilimitado!`);
+      setShowUpgradeModal(true);
+      return;
+    }
+    
+    // Se não requer upgrade, atualizar normalmente
+    setFormData({ ...formData, quantidadeEmpresas: quantidade });
+  };
+
+  // Função para verificar se a quantidade atual requer upgrade
+  const currentQuantityRequiresUpgrade = (): boolean => {
+    return requiresUpgrade(formData.quantidadeEmpresas);
+  };
+
+  // Função para lidar com mudança no select
+  const handleQuantidadeChange = (quantidade: number) => {
+    if (requiresUpgrade(quantidade)) {
+      // Se selecionou uma quantidade premium, mostrar modal
+      setUpgradeReason(`Para buscar ${quantidade} empresas, entre em contato via WhatsApp para adquirir um plano Premium.`);
+      setShowUpgradeModal(true);
+      return;
+    }
+    
+    // Se não requer upgrade, atualizar normalmente
+    setFormData({ ...formData, quantidadeEmpresas: quantidade });
+  };
+
   return (
     <div className="min-h-full bg-background p-2 md:p-6">
       <div className="page-content-wrapper">
@@ -554,13 +599,13 @@ const LeadsPage: React.FC = () => {
               </div>
               <select
                 value={formData.quantidadeEmpresas}
-                onChange={(e) => setFormData({ ...formData, quantidadeEmpresas: parseInt(e.target.value) || 10 })}
+                onChange={(e) => handleQuantidadeChange(parseInt(e.target.value) || 10)}
                 className="w-full bg-card px-3 py-2 rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent appearance-none"
                 required
               >
                 {quantidadeOpcoes.map((quantidade) => (
                   <option key={quantidade} value={quantidade}>
-                    {quantidade} empresas
+                    {quantidade} empresas {requiresUpgrade(quantidade) ? '🔒' : ''}
                   </option>
                 ))}
               </select>
@@ -569,7 +614,7 @@ const LeadsPage: React.FC = () => {
 
           <button
             onClick={handleSubmit}
-            disabled={!formData.tipoEmpresa.trim()}
+            disabled={!formData.tipoEmpresa.trim() || currentQuantityRequiresUpgrade()}
             className="w-full bg-accent text-accent-foreground h-12 rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Target size={16} />
@@ -984,7 +1029,7 @@ const LeadsPage: React.FC = () => {
                       mas seu limite atual é de <span className="font-semibold text-green-600">{warningData.available} empresas</span>.
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Vamos buscar {warningData.available} empresas para você. Para ter acesso ilimitado, fale no WhatsApp para upgrade com desconto exclusivo!
+                      Vamos buscar {warningData.available} empresas para você. Para buscar mais empresas, entre em contato via WhatsApp para adquirir um plano Premium.
                     </p>
                   </div>
 

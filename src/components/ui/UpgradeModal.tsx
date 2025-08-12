@@ -70,8 +70,8 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, reason, re
           </div>
 
           {/* Tabs */}
-          <div className="px-4 pt-4">
-            <div className="flex space-x-1 bg-gray-50/50 dark:bg-gray-800/50 p-1 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="px-6 pt-6">
+            <div className="flex space-x-2 bg-gray-100/50 dark:bg-gray-800/50 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700">
               {[
                 { id: 'upgrade', label: 'Fazer Upgrade', icon: Crown },
                 { id: 'feedback', label: 'Dar Feedback', icon: MessageCircle }
@@ -79,13 +79,13 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, reason, re
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-md text-sm font-medium transition-all duration-200 ${
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${
                     activeTab === tab.id
-                      ? 'bg-[#512FEB] text-white shadow-sm'
-                      : 'text-[#512FEB] dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30'
+                      ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg transform scale-105'
+                      : 'text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30'
                   }`}
                 >
-                  <tab.icon size={16} />
+                  <tab.icon size={18} />
                   {tab.label}
                 </button>
               ))}
@@ -93,12 +93,16 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, reason, re
           </div>
 
           {/* Content */}
-          <div className="p-4">
+          <div className="p-6">
             {activeTab === 'upgrade' ? (
               <div className="space-y-4">
                 {/* Reason */}
-                <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                  <p className="text-sm text-foreground font-medium">
+                <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-200 dark:border-orange-700 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-lg">⚠️</span>
+                    <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-200">Limite Atingido</h4>
+                  </div>
+                  <p className="text-sm text-orange-700 dark:text-orange-300">
                     {reason}
                   </p>
                 </div>
