@@ -34,33 +34,34 @@ export interface CreateInstanceResponse {
 // Serviço WhatsApp
 export const whatsappService = {
   // Criar nova instância WhatsApp
-  async createInstance(name: string): Promise<CreateInstanceResponse> {
+  async createInstance(userEmail: string, displayName?: string): Promise<CreateInstanceResponse> {
     try {
-      console.log('Criando instância WhatsApp:', name);
+      console.log('Criando instância WhatsApp com email único:', userEmail);
       
-      const { data, error } = await supabase.functions.invoke('evolution', {
+      // Primeiro, criar a instância usando a função evolution
+      const { data: evolutionData, error: evolutionError } = await supabase.functions.invoke('evolution', {
         body: {
-          instanceName: name,
+          instanceName: userEmail, // Enviar email como instanceName
           token: "",
           qrcode: true,
           integration: "WHATSAPP-BAILEYS"
         }
       });
 
-      if (error) {
-        console.error('Erro ao criar instância:', error);
+      if (evolutionError) {
+        console.error('Erro ao criar instância:', evolutionError);
         return {
           success: false,
-          error: error.message || 'Erro ao criar instância WhatsApp'
+          error: evolutionError.message || 'Erro ao criar instância WhatsApp'
         };
       }
 
-      console.log('Resposta da API Evolution:', data);
+      console.log('Resposta da API Evolution:', evolutionData);
 
       // Processar resposta da API
-      const instance = data.instance;
-      const hash = data.hash;
-      const settings = data.settings;
+      const instance = evolutionData.instance;
+      const hash = evolutionData.hash;
+      const settings = evolutionData.settings;
 
       // Pegar o usuário atual
       const { data: user } = await supabase.auth.getUser();
@@ -71,20 +72,24 @@ export const whatsappService = {
         };
       }
 
+      // Usar o nome personalizado fornecido ou o email como fallback
+      const finalDisplayName = displayName || userEmail;
+
       // Salvar no banco de dados - Note que agora iniciamos com status 'disconnected'
       const { error: dbError } = await supabase
         .from('whatsapp_instances')
         .insert({
-          instance_name: instance.instanceName,
+          instance_name: evolutionData.instanceName || instance.instanceName, // Nome técnico da Evolution API
+          display_name: finalDisplayName, // Nome personalizado para exibição
           instance_id: instance.instanceId,
           integration: instance.integration,
           hash: hash,
           status: 'disconnected', // Começa desconectado
           settings: settings,
-          webhook_config: data.webhook || {},
-          websocket_config: data.websocket || {},
-          rabbitmq_config: data.rabbitmq || {},
-          sqs_config: data.sqs || {},
+          webhook_config: evolutionData.webhook || {},
+          websocket_config: evolutionData.websocket || {},
+          rabbitmq_config: evolutionData.rabbitmq || {},
+          sqs_config: evolutionData.sqs || {},
           user_id: user.user.id // Adicionar user_id
         });
 
@@ -96,7 +101,7 @@ export const whatsappService = {
         // INCREMENTAR USO DO PLANO GRATUITO
         try {
           console.log('Incrementando uso de conexões: +1');
-          const { data: incrementData, error: incrementError } = await supabase.rpc('increment_daily_usage', {
+          const { error: incrementError } = await supabase.rpc('increment_daily_usage', {
             p_user_id: user.user.id,
             p_usage_type: 'conexoes',
             p_quantity: 1
@@ -112,15 +117,85 @@ export const whatsappService = {
         }
       }
 
-      return {
-        success: true,
-        data: {
-          instanceId: instance.instanceId,
-          name: instance.instanceName,
-          hash: hash,
-          status: 'disconnected'
+      // Agora gerar o QR code usando a função qrcode
+      const instanceNameToUse = evolutionData.instanceName || instance.instanceName;
+      console.log('🔄 Gerando QR code para a instância:', instanceNameToUse);
+      
+      try {
+        // Fazer requisição direta para a função qrcode
+        const encodedName = encodeURIComponent(instanceNameToUse);
+        const qrcodeUrl = `https://goqhudvrndtmxhbblrqa.supabase.co/functions/v1/qrcode?instanceName=${encodedName}`;
+        
+        console.log('📱 Fazendo requisição para:', qrcodeUrl);
+        
+        const qrResponse = await fetch(qrcodeUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvcWh1ZHZybmR0bXhoYmJscnFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTMwOTcsImV4cCI6MjA2ODI2OTA5N30.w3-CFhPBpSSSNCoLAWGzFlf_vtEBjPRRoytUzuP5SQM',
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!qrResponse.ok) {
+          throw new Error(`Erro na requisição qrcode: ${qrResponse.status}`);
         }
-      };
+
+        const qrData = await qrResponse.json();
+        console.log('📱 Resposta da função qrcode:', qrData);
+        
+        // Extrair o QR code da resposta
+        let qrCode = null;
+        if (qrData.qrcode && qrData.qrcode.base64) {
+          qrCode = qrData.qrcode.base64;
+        } else if (qrData.qrcode && qrData.qrcode.code) {
+          qrCode = qrData.qrcode.code;
+        } else if (qrData.base64) {
+          qrCode = qrData.base64;
+        } else if (qrData.code) {
+          qrCode = qrData.code;
+        }
+        
+        if (qrCode) {
+          console.log('✅ QR code extraído com sucesso');
+          
+          return {
+            success: true,
+            data: {
+              instanceId: instance.instanceId,
+              name: evolutionData.instanceName || instance.instanceName, // Usar o instanceName retornado pela API
+              hash: hash,
+              status: 'disconnected',
+              qrCode: qrCode
+            }
+          };
+        } else {
+          console.warn('⚠️ QR code não foi encontrado na resposta, mas instância foi criada');
+          console.log('📱 Estrutura da resposta qrcode:', JSON.stringify(qrData, null, 2));
+          
+          return {
+            success: true,
+            data: {
+              instanceId: instance.instanceId,
+              name: evolutionData.instanceName || instance.instanceName, // Usar o instanceName retornado pela API
+              hash: hash,
+              status: 'disconnected'
+            }
+          };
+        }
+      } catch (qrError) {
+        console.error('❌ Erro ao gerar QR code:', qrError);
+        
+        // Retornar sucesso mesmo sem QR code, pois a instância foi criada
+        return {
+          success: true,
+          data: {
+            instanceId: instance.instanceId,
+            name: instance.instanceName,
+            hash: hash,
+            status: 'disconnected'
+          }
+        };
+      }
       
     } catch (error) {
       console.error('Erro na requisição de criar instância:', error);
@@ -157,6 +232,8 @@ export const whatsappService = {
 
       const data = await response.json();
       console.log('📱 Resposta da API:', data);
+      console.log('📱 Estrutura da resposta:', JSON.stringify(data, null, 2));
+      console.log('📱 QR Code encontrado:', data.qrcode || data.qrCode || data.qr_code || 'NÃO ENCONTRADO');
 
       // Atualiza o status no banco para 'connecting'
       await this.updateInstanceStatus(instanceName, 'connecting');
@@ -201,7 +278,7 @@ export const whatsappService = {
 
       const instances = data.map(inst => ({
         id: inst.instance_id,
-        name: inst.instance_name,
+        name: inst.display_name || inst.instance_name, // Usar display_name se disponível, senão usar instance_name
         status: inst.status as 'connected' | 'disconnected' | 'connecting',
         createdAt: new Date(inst.created_at).toLocaleDateString('pt-BR') + ' às ' + new Date(inst.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         lastActivity: inst.status === 'connected' ? 'Agora' : 'Nunca',
@@ -273,23 +350,220 @@ export const whatsappService = {
     }
   },
 
-  // Deletar instância
+  // Deletar instância WhatsApp
   async deleteInstance(instanceId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const { error } = await supabase
+      console.log('🗑️ Deletando instância WhatsApp:', instanceId);
+      
+      // Primeiro, buscar o nome da instância no banco
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        return {
+          success: false,
+          error: 'Usuário não autenticado'
+        };
+      }
+
+      const { data: instanceData, error: fetchError } = await supabase
+        .from('whatsapp_instances')
+        .select('instance_name')
+        .eq('instance_id', instanceId)
+        .eq('user_id', user.user.id)
+        .single();
+
+      if (fetchError || !instanceData) {
+        console.error('Erro ao buscar instância:', fetchError);
+        return {
+          success: false,
+          error: 'Instância não encontrada'
+        };
+      }
+
+      // Deletar da Evolution API (fazer logout primeiro, depois delete)
+      const userEmail = instanceData.instance_name;
+      
+      try {
+        // Passo 1: Logout
+        console.log('🔓 Fazendo logout da Evolution API:', userEmail);
+        const { error: logoutError } = await supabase.functions.invoke('logout', {
+          body: {
+            userEmail: userEmail
+          }
+        });
+
+        if (logoutError) {
+          console.warn('⚠️ Erro no logout (continuando com delete):', logoutError);
+        } else {
+          console.log('✅ Logout realizado com sucesso!');
+        }
+
+        // Passo 2: Delete
+        console.log('🗑️ Deletando da Evolution API:', userEmail);
+        const { error: deleteError } = await supabase.functions.invoke('deleteInstance', {
+          body: {
+            userEmail: userEmail
+          }
+        });
+
+        if (deleteError) {
+          console.warn('⚠️ Erro ao deletar da Evolution API (continuando com banco):', deleteError);
+        } else {
+          console.log('✅ Deletado da Evolution API com sucesso!');
+        }
+      } catch (evolutionError) {
+        console.warn('⚠️ Erro ao processar Evolution API (continuando com banco):', evolutionError);
+      }
+
+      // Remover do banco de dados
+      const { error: dbError } = await supabase
         .from('whatsapp_instances')
         .delete()
         .eq('instance_id', instanceId);
 
-      if (error) {
-        console.error('Erro ao deletar instância:', error);
-        return { success: false, error: error.message };
+      if (dbError) {
+        console.error('❌ Erro ao remover do banco:', dbError);
+        return {
+          success: false,
+          error: 'Erro ao remover instância do banco de dados'
+        };
       }
 
+      console.log('✅ Instância removida completamente com sucesso!');
       return { success: true };
+      
     } catch (error) {
-      console.error('Erro ao deletar instância:', error);
-      return { success: false, error: 'Erro interno' };
+      console.error('💥 Erro ao deletar instância:', error);
+      return {
+        success: false,
+        error: 'Erro inesperado ao deletar instância'
+      };
+    }
+  },
+
+  // Atualizar nome de exibição da instância
+  async updateDisplayName(instanceId: string, displayName: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('📝 Atualizando nome de exibição para:', instanceId, '→', displayName);
+      
+      // Pegar o usuário atual
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        return {
+          success: false,
+          error: 'Usuário não autenticado'
+        };
+      }
+
+      const { error: updateError } = await supabase
+        .from('whatsapp_instances')
+        .update({ display_name: displayName })
+        .eq('instance_id', instanceId)
+        .eq('user_id', user.user.id);
+
+      if (updateError) {
+        console.error('❌ Erro ao atualizar nome:', updateError);
+        return {
+          success: false,
+          error: 'Erro ao atualizar nome da instância'
+        };
+      }
+
+      console.log('✅ Nome atualizado com sucesso!');
+      return { success: true };
+      
+    } catch (error) {
+      console.error('💥 Erro ao atualizar nome:', error);
+      return {
+        success: false,
+        error: 'Erro inesperado ao atualizar nome'
+      };
+    }
+  },
+
+  // Gerar novo QR Code para instância existente
+  async generateNewQrCode(instanceId: string): Promise<{ success: boolean; qrCode?: string; error?: string }> {
+    try {
+      console.log('Gerando novo QR Code para instância:', instanceId);
+      
+      // Primeiro, buscar o nome da instância no banco
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        return {
+          success: false,
+          error: 'Usuário não autenticado'
+        };
+      }
+      
+      const { data: instanceData, error: fetchError } = await supabase
+        .from('whatsapp_instances')
+        .select('instance_name')
+        .eq('instance_id', instanceId)
+        .eq('user_id', user.user.id)
+        .single();
+      
+      if (fetchError || !instanceData) {
+        console.error('Erro ao buscar instância:', fetchError);
+        return {
+          success: false,
+          error: 'Instância não encontrada'
+        };
+      }
+      
+      // Agora usar a função qrcode correta diretamente
+      const encodedName = encodeURIComponent(instanceData.instance_name);
+      const qrcodeUrl = `https://goqhudvrndtmxhbblrqa.supabase.co/functions/v1/qrcode?instanceName=${encodedName}`;
+      
+      console.log('📱 Gerando novo QR code para:', instanceData.instance_name);
+      console.log('📱 URL da requisição:', qrcodeUrl);
+      
+      const qrResponse = await fetch(qrcodeUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvcWh1ZHZybmR0bXhoYmJscnFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTMwOTcsImV4cCI6MjA2ODI2OTA5N30.w3-CFhPBpSSSNCoLAWGzFlf_vtEBjPRRoytUzuP5SQM',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!qrResponse.ok) {
+        throw new Error(`Erro na requisição qrcode: ${qrResponse.status}`);
+      }
+
+      const qrData = await qrResponse.json();
+      console.log('📱 Resposta da função qrcode:', qrData);
+      
+      // Extrair o QR code da resposta
+      let qrCode = null;
+      if (qrData.qrcode && qrData.qrcode.base64) {
+        qrCode = qrData.qrcode.base64;
+      } else if (qrData.qrcode && qrData.qrcode.code) {
+        qrCode = qrData.qrcode.code;
+      } else if (qrData.base64) {
+        qrCode = qrData.base64;
+      } else if (qrData.code) {
+        qrCode = qrData.code;
+      }
+      
+      if (qrCode) {
+        console.log('✅ Novo QR Code gerado com sucesso!');
+        return {
+          success: true,
+          qrCode: qrCode
+        };
+      } else {
+        console.warn('⚠️ QR Code não foi encontrado na resposta');
+        console.log('📱 Estrutura da resposta qrcode:', JSON.stringify(qrData, null, 2));
+        return {
+          success: false,
+          error: 'QR Code não foi encontrado na resposta'
+        };
+      }
+      
+    } catch (error) {
+      console.error('Erro ao gerar novo QR Code:', error);
+      return {
+        success: false,
+        error: 'Erro inesperado ao gerar novo QR Code'
+      };
     }
   },
 

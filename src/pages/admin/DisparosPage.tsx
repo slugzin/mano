@@ -10,25 +10,27 @@ import {
   Building,
   Phone,
   Globe,
-  MapPin,
   X,
   Filter,
   ChevronDown,
   Check,
   Star,
-  Search,
   BarChart3,
   Target,
   CheckCircle,
   Clock,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  RefreshCw,
+  Plus
 } from '../../utils/icons';
+import { QrCode } from 'lucide-react';
 import { templateService, MessageTemplate } from '../../services/templateService';
 import { substituirVariaveis } from '../../utils/variables';
 import { supabase } from '../../lib/supabase';
 import { useFiltros } from '../../contexts/FiltrosContext';
 import { usePlanLimits } from '../../contexts/PlanLimitsContext';
+import { whatsappService, WhatsAppInstance } from '../../services/whatsappService';
 import PageHeader from '../../components/ui/PageHeader';
 import LoadingScreen from '../../components/ui/LoadingScreen';
 
@@ -45,6 +47,7 @@ interface WhatsAppConnection {
   instance_name: string;
   instance_id: string;
   status: string;
+  display_name?: string;
 }
 
 interface Fluxo {
@@ -103,7 +106,7 @@ const DisparosPage: React.FC = () => {
   const [kanbanSegments, setKanbanSegments] = useState<KanbanSegment[]>([]);
   const [selectedSegment, setSelectedSegment] = useState<KanbanSegment | null>(null);
   const [empresasSegmento, setEmpresasSegmento] = useState<any[]>([]);
-  const [empresaDetalhes, setEmpresaDetalhes] = useState<any>(null);
+  // Removido - não utilizado
   const [selecionadas, setSelecionadas] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -125,7 +128,7 @@ const DisparosPage: React.FC = () => {
   
   // Dados para filtros
   const [cidadesDisponiveis, setCidadesDisponiveis] = useState<string[]>([]);
-  const [categoriasDisponiveis, setCategoriasDisponiveis] = useState<string[]>([]);
+  // Removido - não utilizado
   
   // Modal de configuração - Wizard por etapas
   const [showDisparoConfig, setShowDisparoConfig] = useState(false);
@@ -161,6 +164,33 @@ const DisparosPage: React.FC = () => {
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [saveTemplateSuccess, setSaveTemplateSuccess] = useState(false);
+
+  // Estados para modal de QR Code
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [showCreateConnectionModal, setShowCreateConnectionModal] = useState(false);
+  const [selectedInstance, setSelectedInstance] = useState<WhatsAppInstance | null>(null);
+  const [newInstanceName, setNewInstanceName] = useState('');
+  const [qrCodeExpired, setQrCodeExpired] = useState(false);
+  const [isGeneratingNewQr, setIsGeneratingNewQr] = useState(false);
+  const [isGeneratingInitialQr, setIsGeneratingInitialQr] = useState(false);
+  const [isCreatingInstance, setIsCreatingInstance] = useState(false);
+  const [autoRefreshTimer, setAutoRefreshTimer] = useState<NodeJS.Timeout | null>(null);
+  const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(20);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  
+  // Estado para verificar se pode criar nova conexão
+  const [canCreateConnection, setCanCreateConnection] = useState(false);
+
+  // Verificar se pode criar nova conexão sempre que as conexões mudarem
+  useEffect(() => {
+    const checkCanCreateConnection = async () => {
+      const canCreate = await canPerformAction('criar_conexao', 1);
+      setCanCreateConnection(canCreate);
+    };
+    
+    checkCanCreateConnection();
+  }, [connections, canPerformAction]);
 
   // Efeito para controlar o scroll e barra de navegação quando o modal está aberto
   useEffect(() => {
@@ -224,6 +254,69 @@ const DisparosPage: React.FC = () => {
       }
     };
   }, [showDisparoConfig]);
+
+  // Timer automático para regenerar QR Code a cada 20 segundos
+  useEffect(() => {
+    if (showQrModal && selectedInstance) {
+      setSecondsUntilRefresh(20);
+      
+      const countdownTimer = setInterval(() => {
+        setSecondsUntilRefresh(prev => {
+          if (prev <= 1) {
+            return 20;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      const refreshTimer = setInterval(() => {
+        if (selectedInstance) {
+          console.log('🔄 Auto-regenerando QR Code...');
+          handleGenerateQrCodeForInstance(selectedInstance);
+        }
+      }, 20000);
+
+      setAutoRefreshTimer(refreshTimer);
+
+      return () => {
+        clearInterval(countdownTimer);
+        clearInterval(refreshTimer);
+        setAutoRefreshTimer(null);
+      };
+    }
+  }, [showQrModal, selectedInstance]);
+
+  // Limpar timer quando modal fechar
+  useEffect(() => {
+    if (!showQrModal && autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      setAutoRefreshTimer(null);
+      setSecondsUntilRefresh(20);
+    }
+  }, [showQrModal, autoRefreshTimer]);
+
+  // Timer para detectar quando o QR code expirou (2 minutos)
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
+    if (showQrModal && selectedInstance && selectedInstance.qrCode && !qrCodeExpired) {
+      timer = setTimeout(() => {
+        setQrCodeExpired(true);
+        console.log('⏰ QR Code expirou automaticamente');
+      }, 120000); // 2 minutos
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [showQrModal, selectedInstance, qrCodeExpired]);
+
+  // Resetar estado de expiração quando abrir novo modal
+  useEffect(() => {
+    if (showQrModal) {
+      setQrCodeExpired(false);
+    }
+  }, [showQrModal]);
 
   // Carregar dados iniciais
   useEffect(() => {
@@ -366,22 +459,11 @@ const DisparosPage: React.FC = () => {
         )].sort();
 
         setCidadesDisponiveis(cidades);
-        setCategoriasDisponiveis(categorias);
+        // setCategoriasDisponiveis removido - não utilizado
       }
 
       // Carregar conexões WhatsApp do usuário atual
-      const { data: user } = await supabase.auth.getUser();
-      if (user.user) {
-        const { data: connectionsData } = await supabase
-          .from('whatsapp_instances')
-          .select('*')
-          .eq('status', 'connected')
-          .eq('user_id', user.user.id); // Filtrar apenas conexões do usuário atual
-
-        if (connectionsData) {
-          setConnections(connectionsData);
-        }
-      }
+      await loadConnections();
 
       // Carregar templates
       const templatesResult = await templateService.listTemplates();
@@ -618,6 +700,227 @@ const DisparosPage: React.FC = () => {
     }
   };
 
+  // Função para carregar conexões (todas: conectadas e desconectadas)
+  const loadConnections = async () => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (user.user) {
+        const { data: connectionsData } = await supabase
+          .from('whatsapp_instances')
+          .select('*')
+          .eq('user_id', user.user.id)
+          .order('created_at', { ascending: false }); // Mais recentes primeiro
+
+        if (connectionsData) {
+          setConnections(connectionsData);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar conexões:', error);
+    }
+  };
+
+  // Funções para QR Code e criação de conexão
+  const handleCreateConnection = async () => {
+    if (!newInstanceName.trim()) return;
+    
+    setIsCreatingInstance(true);
+    
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        console.error('Usuário não autenticado');
+        return;
+      }
+
+      // Criar a instância com o email do usuário e nome personalizado
+      const result = await whatsappService.createInstance(user.user.email || '', newInstanceName.trim());
+      
+      if (result.success && result.data) {
+        const createdInstance: WhatsAppInstance = {
+          id: result.data.instanceId,
+          name: newInstanceName.trim(),
+          status: 'disconnected',
+          createdAt: new Date().toISOString(),
+          qrCode: result.data.qrCode,
+          instanceId: result.data.instanceId,
+          hash: result.data.hash
+        };
+        
+        // Fechar modal de criação e abrir modal de QR Code
+        setNewInstanceName('');
+        setShowCreateConnectionModal(false);
+        setSelectedInstance(createdInstance);
+        setShowQrModal(true);
+        
+        // Recarregar conexões após criar
+        loadConnections();
+        
+      } else {
+        console.error('Erro ao criar conexão:', result.error);
+      }
+    } catch (error) {
+      console.error('Erro inesperado ao criar conexão:', error);
+    } finally {
+      setIsCreatingInstance(false);
+    }
+  };
+
+  const handleGenerateQrCodeForInstance = async (instance: WhatsAppInstance) => {
+    if (!instance) return;
+    console.log('🔄 Gerando QR code para instância:', instance.name);
+    setIsGeneratingInitialQr(true);
+    
+    try {
+      const result = await whatsappService.generateNewQrCode(instance.instanceId || '');
+      if (result.success && result.qrCode) {
+        setSelectedInstance({ ...instance, qrCode: result.qrCode });
+        console.log('✅ QR Code gerado com sucesso para:', instance.name);
+      } else {
+        console.error('❌ Erro ao gerar QR Code:', result.error);
+      }
+    } catch (error) {
+      console.error('💥 Erro ao gerar QR Code:', error);
+    } finally {
+      setIsGeneratingInitialQr(false);
+    }
+  };
+
+  const handleGenerateNewQrCode = async () => {
+    if (!selectedInstance) return;
+    
+    setIsGeneratingNewQr(true);
+    setQrCodeExpired(false);
+    
+    try {
+      const result = await whatsappService.generateNewQrCode(selectedInstance.instanceId || '');
+      if (result.success && result.qrCode) {
+        setSelectedInstance({ ...selectedInstance, qrCode: result.qrCode });
+        console.log('✅ Novo QR Code gerado com sucesso!');
+      } else {
+        console.error('❌ Erro ao gerar novo QR Code:', result.error);
+      }
+    } catch (error) {
+      console.error('💥 Erro ao gerar novo QR Code:', error);
+    } finally {
+      setIsGeneratingNewQr(false);
+    }
+  };
+
+  const handleCheckConnection = async () => {
+    if (!selectedInstance) return;
+    
+    setIsRefreshing(true);
+    
+    try {
+      console.log('🔄 Verificando status da conexão...');
+      
+      // Pegar o email do usuário logado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        console.error('❌ Usuário não está logado');
+        return;
+      }
+      
+      console.log('📧 Email do usuário:', user.email);
+      
+      // Fazer requisição para verificar status da conexão
+      const response = await fetch('https://goqhudvrndtmxhbblrqa.supabase.co/functions/v1/atualizar', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvcWh1ZHZybmR0bXhoYmJscnFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTMwOTcsImV4cCI6MjA2ODI2OTA5N30.w3-CFhPBpSSSNCoLAWGzFlf_vtEBjPRRoytUzuP5SQM',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userEmail: user.email
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Dados recebidos da API:', result);
+        
+        if (result.success) {
+          console.log(`🎉 ${result.message}`);
+          
+          // Recarregar a lista de conexões para verificar se esta instância foi conectada
+          await loadConnections();
+          
+          // Verificar se a instância atual foi conectada
+          const { data: updatedInstance } = await supabase
+            .from('whatsapp_instances')
+            .select('status')
+            .eq('instance_id', selectedInstance.instanceId)
+            .eq('user_id', user.id)
+            .single();
+          
+          if (updatedInstance?.status === 'connected') {
+            setUpdateMessage('🎉 WhatsApp conectado com sucesso!');
+            setShowQrModal(false); // Fechar o modal se conectou
+            await loadConnections(); // Recarregar conexões para atualizar a lista
+          } else {
+            setUpdateMessage('📱 Ainda não detectamos a conexão. Tente novamente em alguns segundos.');
+          }
+          
+          // Limpar mensagem após 3 segundos
+          setTimeout(() => setUpdateMessage(null), 3000);
+        } else {
+          console.error('❌ Erro na resposta:', result.error);
+          setUpdateMessage(`❌ Erro: ${result.error}`);
+          setTimeout(() => setUpdateMessage(null), 3000);
+        }
+      } else {
+        console.error('❌ Erro na requisição de verificação:', response.status);
+        setUpdateMessage('❌ Erro ao verificar conexão');
+        setTimeout(() => setUpdateMessage(null), 3000);
+      }
+      
+      console.log('🔄 Verificação concluída!');
+    } catch (error) {
+      console.error('💥 Erro ao verificar conexão:', error);
+      setUpdateMessage('❌ Erro inesperado ao verificar conexão');
+      setTimeout(() => setUpdateMessage(null), 3000);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
+  // Função para excluir conexão
+  const handleDeleteConnection = async (connectionId: string, connectionName: string) => {
+    if (!confirm(`Tem certeza que deseja excluir a conexão "${connectionName}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    try {
+      const result = await whatsappService.deleteInstance(connectionId);
+      if (result.success) {
+        console.log('✅ Conexão excluída com sucesso!');
+        // Recarregar lista de conexões
+        loadConnections();
+      } else {
+        console.error('❌ Erro ao excluir conexão:', result.error);
+      }
+    } catch (error) {
+      console.error('💥 Erro inesperado ao excluir conexão:', error);
+    }
+  };
+
+  // Função para conectar uma instância existente
+  const handleConnectExistingInstance = (connection: WhatsAppConnection) => {
+    const instance: WhatsAppInstance = {
+      id: connection.instance_id,
+      name: connection.instance_name,
+      status: connection.status as 'connected' | 'disconnected' | 'connecting',
+      createdAt: new Date().toISOString(),
+      instanceId: connection.instance_id
+    };
+    
+    setSelectedInstance(instance);
+    setShowQrModal(true);
+    // Gerar QR code automaticamente
+    handleGenerateQrCodeForInstance(instance);
+  };
+
   // Funções do wizard
   const nextStep = () => {
     if (currentStep < 2) {
@@ -632,7 +935,7 @@ const DisparosPage: React.FC = () => {
   };
 
   const resetWizard = () => {
-    setCurrentStep(1);
+    setCurrentStep(1); // Começa na conexão
     setSelectedConnection(null);
     setSelectedTemplate(null);
     setSelectedFluxo(null);
@@ -642,18 +945,39 @@ const DisparosPage: React.FC = () => {
   };
 
   const canProceedToStep2 = () => {
-    return selectedConnection !== null;
+    // Para o primeiro passo (conexão), verificar se há conexão selecionada
+    if (currentStep === 1) {
+      return selectedConnection !== null;
+    }
+    // Para o segundo passo (mensagem), verificar se há conteúdo válido
+    if (currentStep === 2) {
+      if (messageType === 'custom') {
+        return customMessage.trim().length > 0;
+      } else if (messageType === 'template') {
+        return selectedTemplate !== null;
+      } else if (messageType === 'fluxo') {
+        return selectedFluxo !== null;
+      }
+      return false;
+    }
+    return false;
   };
 
   const canFinishWizard = () => {
+    // Deve ter conexão selecionada
+    const hasConnection = selectedConnection !== null;
+    
+    // Deve ter mensagem válida
+    let hasValidMessage = false;
     if (messageType === 'custom') {
-      return customMessage.trim().length > 0;
+      hasValidMessage = customMessage.trim().length > 0;
     } else if (messageType === 'template') {
-      return selectedTemplate !== null;
+      hasValidMessage = selectedTemplate !== null;
     } else if (messageType === 'fluxo') {
-      return selectedFluxo !== null;
+      hasValidMessage = selectedFluxo !== null;
     }
-    return false;
+    
+    return hasConnection && hasValidMessage;
   };
 
   const handleLaunch = async () => {
@@ -1389,10 +1713,10 @@ const DisparosPage: React.FC = () => {
                                     e.stopPropagation();
                                     handleShowEmpresaInfo(empresa);
                                   }}
-                                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+                                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg info-button-hover info-button-glow"
                                   title="Ver informações da empresa"
                                 >
-                                  <AlertCircle size={14} />
+                                  <AlertCircle size={14} className="info-button-bounce" />
                                 </button>
                                 {/* Checkbox de seleção */}
                                 <button
@@ -1518,88 +1842,208 @@ const DisparosPage: React.FC = () => {
 
               {/* Conteúdo por Etapas */}
               <div className="p-3 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto flex-1">
-                {/* Etapa 1: Seleção de Conexão */}
+                {/* Etapa 1: Conexão */}
                 {currentStep === 1 && (
                   <div className="space-y-3">
-                    <div className="text-center mb-4">
-                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <Phone size={20} className="sm:w-6 sm:h-6 text-green-500" />
+                    <div className="text-center mb-2 sm:mb-4">
+                      <div className="w-8 h-8 sm:w-12 sm:h-12 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-1 sm:mb-2">
+                        <Phone size={16} className="sm:w-5 sm:h-5 text-green-500" />
                       </div>
-                      <h3 className="text-base sm:text-lg font-semibold text-foreground mb-1">
+                      <h3 className="text-sm sm:text-base font-medium text-foreground mb-0.5 sm:mb-1">
                         Selecione a Conexão WhatsApp
                       </h3>
-                      <p className="text-xs sm:text-sm text-muted-foreground">
+                      <p className="text-xs text-muted-foreground hidden sm:block">
                         Escolha o dispositivo para envio
                       </p>
                     </div>
 
-                    {connections.length === 0 ? (
-                      <div className="text-center py-8 border-2 border-dashed border-border rounded-xl">
-                        <Phone className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                        <h3 className="text-sm font-medium text-foreground mb-2">Nenhuma conexão encontrada</h3>
-                        <p className="text-xs text-muted-foreground mb-4">Configure uma conexão WhatsApp primeiro</p>
-                        <button
-                          onClick={() => {
-                            setShowDisparoConfig(false);
-                            navigate('/admin/conexoes');
-                          }}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/90 text-accent-foreground rounded-lg font-medium transition-colors text-sm"
-                        >
-                          <Phone size={16} />
-                          Configurar Conexão
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {connections.map((connection) => (
-                          <button
-                            key={connection.id}
-                            onClick={() => setSelectedConnection(connection.instance_name)}
-                            className={`w-full p-4 border-2 rounded-xl text-left transition-all duration-200 ${
-                              selectedConnection === connection.instance_name
-                                ? 'border-accent bg-accent/10 shadow-md'
-                                : 'border-border hover:border-accent/40 hover:bg-accent/5 shadow-sm hover:shadow-md'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className={`w-4 h-4 rounded-full transition-all duration-200 ${
-                                selectedConnection === connection.instance_name 
-                                  ? 'bg-accent shadow-sm' 
-                                  : 'bg-muted'
-                              }`}></div>
-                              <div className="flex-1">
-                                <div className="font-medium text-sm text-foreground">
-                                  {connection.instance_name}
-                                </div>
-                                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                  <div className={`w-2 h-2 rounded-full ${
-                                    connection.status === 'connected' ? 'bg-green-500' : 'bg-yellow-500'
-                                  }`}></div>
-                                  {connection.status === 'connected' ? 'Conectado' : 'Desconectado'}
+{(() => {
+                      const connectedConnections = connections.filter(c => c.status === 'connected');
+                      const disconnectedConnections = connections.filter(c => c.status === 'disconnected');
+                      
+                      if (connections.length === 0) {
+                        // Nenhuma conexão
+                        return (
+                          <div className="text-center py-8 border-2 border-dashed border-border rounded-xl">
+                            <Phone className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                            <h3 className="text-sm font-medium text-foreground mb-2">Nenhuma conexão encontrada</h3>
+                            <p className="text-xs text-muted-foreground mb-4">Configure uma conexão WhatsApp primeiro</p>
+                            <button
+                              onClick={() => setShowCreateConnectionModal(true)}
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/90 text-accent-foreground rounded-lg font-medium transition-colors text-sm"
+                            >
+                              <Plus size={16} />
+                              Configurar Conexão
+                            </button>
+                          </div>
+                        );
+                      } else if (connectedConnections.length === 0 && disconnectedConnections.length > 0) {
+                        // Tem conexões mas todas desconectadas
+                        return (
+                          <div className="space-y-3">
+                            <div className="text-center py-4 border-2 border-dashed border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
+                              <Phone className="mx-auto h-10 w-10 text-yellow-600 dark:text-yellow-400 mb-3" />
+                              <h3 className="text-sm font-medium text-foreground mb-1">Conexões encontradas, mas desconectadas</h3>
+                              <p className="text-xs text-muted-foreground">Conecte uma conexão existente ou exclua para criar nova</p>
+                            </div>
+                            
+                            {disconnectedConnections.map((connection) => (
+                              <div
+                                key={connection.id}
+                                className="p-4 border-2 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/10 rounded-xl"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
+                                    <div className="flex-1">
+                                      <div className="font-medium text-sm text-foreground">
+                                        {connection.display_name || connection.instance_name}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                        <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                                        Desconectado
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => handleConnectExistingInstance(connection)}
+                                      className="px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                                    >
+                                      <QrCode size={14} />
+                                      Conectar
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteConnection(connection.instance_id, connection.display_name || connection.instance_name)}
+                                      className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                                    >
+                                      <X size={14} />
+                                      Excluir
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                              {selectedConnection === connection.instance_name && (
-                                <CheckCircle size={20} className="text-accent" />
-                              )}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                            ))}
+                            
+                            {/* Só mostrar "Criar Nova Conexão" se não atingiu o limite do plano */}
+                            {canCreateConnection ? (
+                              <div className="text-center pt-2">
+                                <button
+                                  onClick={() => setShowCreateConnectionModal(true)}
+                                  className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/90 text-accent-foreground rounded-lg font-medium transition-colors text-sm"
+                                >
+                                  <Plus size={16} />
+                                  Criar Nova Conexão
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center pt-2">
+                                <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
+                                  <p className="text-xs text-orange-700 dark:text-orange-300 font-medium">
+                                    Limite de conexões atingido para o plano gratuito
+                                  </p>
+                                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                                    Exclua uma conexão existente ou faça upgrade do plano
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      } else {
+                        // Tem conexões conectadas - mostrar para seleção
+                        return (
+                          <div className="space-y-3">
+                            {connectedConnections.map((connection) => (
+                              <button
+                                key={connection.id}
+                                onClick={() => setSelectedConnection(connection.instance_name)}
+                                className={`w-full p-4 border-2 rounded-xl text-left transition-all duration-200 ${
+                                  selectedConnection === connection.instance_name
+                                    ? 'border-accent bg-accent/10 shadow-md'
+                                    : 'border-border hover:border-accent/40 hover:bg-accent/5 shadow-sm hover:shadow-md'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                                    selectedConnection === connection.instance_name 
+                                      ? 'bg-accent shadow-sm' 
+                                      : 'bg-muted'
+                                  }`}></div>
+                                  <div className="flex-1">
+                                    <div className="font-medium text-sm text-foreground">
+                                      {connection.display_name || connection.instance_name}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                      Conectado
+                                    </div>
+                                  </div>
+                                  {selectedConnection === connection.instance_name && (
+                                    <CheckCircle size={20} className="text-accent" />
+                                  )}
+                                </div>
+                              </button>
+                            ))}
+                            
+                            {/* Mostrar conexões desconectadas também */}
+                            {disconnectedConnections.map((connection) => (
+                              <div
+                                key={connection.id}
+                                className="p-4 border-2 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/10 rounded-xl"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
+                                    <div className="flex-1">
+                                      <div className="font-medium text-sm text-foreground">
+                                        {connection.display_name || connection.instance_name}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                        <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                                        Desconectado
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => handleConnectExistingInstance(connection)}
+                                      className="px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                                    >
+                                      <QrCode size={14} />
+                                      Conectar
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteConnection(connection.instance_id, connection.display_name || connection.instance_name)}
+                                      className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                                    >
+                                      <X size={14} />
+                                      Excluir
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                 )}
 
                 {/* Etapa 2: Mensagem */}
                 {currentStep === 2 && (
                   <div className="space-y-3">
-                    <div className="text-center mb-2 sm:mb-4">
-                      <div className="w-8 h-8 sm:w-12 sm:h-12 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-1 sm:mb-2">
-                        <MessageCircle size={16} className="sm:w-5 sm:h-5 text-blue-500" />
+                    <div className="text-center mb-4">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <MessageCircle size={20} className="sm:w-6 sm:h-6 text-blue-500" />
                       </div>
-                      <h3 className="text-sm sm:text-base font-medium text-foreground mb-0.5 sm:mb-1">
+                      <h3 className="text-base sm:text-lg font-semibold text-foreground mb-1">
                         Configure sua Mensagem
                       </h3>
-                      <p className="text-xs text-muted-foreground hidden sm:block">
+                      <p className="text-xs sm:text-sm text-muted-foreground">
                         Escreva a mensagem para as empresas
                       </p>
                     </div>
@@ -1880,6 +2324,8 @@ const DisparosPage: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+
               </div>
 
               {/* Botões de Navegação */}
@@ -2378,6 +2824,316 @@ const DisparosPage: React.FC = () => {
                   </button>
                 </div>
               )}
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal de Criar Nova Conexão */}
+        {showCreateConnectionModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="relative bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-6 border-b border-border">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-emerald-500"></div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                      <Plus size={24} className="text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold text-foreground">Nova Conexão</h2>
+                      <p className="text-sm text-muted-foreground">WhatsApp Business</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowCreateConnectionModal(false)}
+                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-black/20 rounded-lg transition-all"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-foreground">
+                    Nome para Identificação
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={newInstanceName}
+                      onChange={(e) => setNewInstanceName(e.target.value)}
+                      placeholder="Ex: WhatsApp da Empresa"
+                      className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-foreground placeholder:text-muted-foreground transition-all"
+                      disabled={isCreatingInstance}
+                    />
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <Phone size={16} className="text-muted-foreground" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Este nome é apenas para você se organizar. A instância será criada automaticamente.
+                  </p>
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <QrCode size={16} className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="text-sm">
+                      <p className="font-medium text-foreground mb-2">Próximos passos:</p>
+                      <div className="space-y-1.5 text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                          <span>Instância criada automaticamente</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                          <span>QR Code gerado instantaneamente</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                          <span>Escaneie para conectar seu WhatsApp</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-border">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowCreateConnectionModal(false)}
+                    disabled={isCreatingInstance}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCreateConnection}
+                    disabled={!newInstanceName.trim() || isCreatingInstance}
+                    className="flex-1 px-6 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    {isCreatingInstance ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Criando...
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={16} />
+                        Criar Conexão
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal de QR Code */}
+        {showQrModal && selectedInstance && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-hidden"
+            >
+              <div className="relative bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-4 sm:p-6 border-b border-border">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-emerald-500"></div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                      <QrCode size={20} className="text-green-600 dark:text-green-400 sm:w-6 sm:h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg sm:text-xl font-semibold text-foreground">Conectar WhatsApp</h2>
+                      <p className="text-xs sm:text-sm text-muted-foreground">{selectedInstance.name}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowQrModal(false)}
+                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-white/50 dark:hover:bg-black/20 rounded-lg transition-all"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+                <div className="flex items-center justify-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl">
+                  <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                    {qrCodeExpired ? 'QR Code expirado' : 'Aguardando conexão...'}
+                  </p>
+                </div>
+
+                <div className="text-center">
+                  {selectedInstance.qrCode && !qrCodeExpired ? (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="relative"
+                    >
+                      <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-lg border-2 border-green-200 dark:border-green-800 mx-auto inline-block">
+                        <img
+                          src={selectedInstance.qrCode}
+                          alt="QR Code WhatsApp"
+                          className="w-40 h-40 sm:w-48 sm:h-48 mx-auto"
+                        />
+                      </div>
+                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                        <CheckCircle size={12} className="text-white" />
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl p-8 sm:p-12">
+                      <div className="space-y-4">
+                        {isGeneratingInitialQr || isGeneratingNewQr ? (
+                          <div className="relative mx-auto w-16 h-16 sm:w-20 sm:h-20">
+                            <div className="absolute inset-0 border-4 border-green-200 dark:border-green-800 rounded-full"></div>
+                            <div className="absolute inset-0 border-4 border-transparent border-t-green-500 rounded-full animate-spin"></div>
+                            <div className="absolute inset-2 border-2 border-transparent border-t-emerald-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <RefreshCw size={24} className="text-green-600 dark:text-green-400" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="relative mx-auto w-16 h-16 sm:w-20 sm:h-20">
+                            <div className="absolute inset-0 border-4 border-green-200 dark:border-green-800 rounded-full"></div>
+                            <div className="absolute inset-0 border-4 border-transparent border-t-green-500 rounded-full animate-spin"></div>
+                            <div className="absolute inset-2 border-2 border-transparent border-t-emerald-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <QrCode size={24} className="text-green-600 dark:text-green-400" />
+                            </div>
+                          </div>
+                        )}
+                        <div className="text-center">
+                          <p className="text-sm sm:text-base font-medium text-foreground">
+                            {isGeneratingInitialQr ? 'Gerando QR Code...' :
+                             isGeneratingNewQr ? 'Gerando novo QR Code...' : 
+                             qrCodeExpired ? 'QR Code expirado' : 'Conectando WhatsApp...'}
+                          </p>
+                          <p className="text-xs sm:text-sm text-muted-foreground">
+                            {isGeneratingInitialQr ? 'Aguarde um momento' :
+                             isGeneratingNewQr ? 'Aguarde um momento' : 
+                             qrCodeExpired ? 'Clique em "Gerar Novo QR Code"' : 'Gerando QR Code seguro'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Indicador de auto-refresh */}
+                {selectedInstance.qrCode && !qrCodeExpired && !isGeneratingInitialQr && !isGeneratingNewQr && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-center"
+                  >
+                    <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-3">
+                      <div className="flex items-center justify-center gap-2 text-blue-700 dark:text-blue-300">
+                        <RefreshCw size={14} className="animate-spin" />
+                        <span className="text-sm font-medium">
+                          Auto-refresh em {secondsUntilRefresh}s
+                        </span>
+                      </div>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        QR Code será atualizado automaticamente
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Botão "Já Conectei" para verificar status */}
+                {selectedInstance.qrCode && !qrCodeExpired && !isGeneratingInitialQr && !isGeneratingNewQr && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-center"
+                  >
+                    <button
+                      onClick={handleCheckConnection}
+                      disabled={isRefreshing}
+                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mx-auto"
+                    >
+                      {isRefreshing ? (
+                        <>
+                          <RefreshCw size={18} className="animate-spin" />
+                          Verificando...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle size={18} />
+                          Já Conectei
+                        </>
+                      )}
+                    </button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Clique aqui após escanear o QR code no WhatsApp
+                    </p>
+                  </motion.div>
+                )}
+
+                {/* Botão para gerar novo QR Code quando expirar */}
+                {qrCodeExpired && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-center"
+                  >
+                    <button
+                      onClick={handleGenerateNewQrCode}
+                      disabled={isGeneratingNewQr}
+                      className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mx-auto"
+                    >
+                      {isGeneratingNewQr ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Gerando...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={16} />
+                          Gerar Novo QR Code
+                        </>
+                      )}
+                    </button>
+                  </motion.div>
+                )}
+
+                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-3">
+                  <h4 className="text-sm font-medium text-foreground">Como conectar:</h4>
+                  <div className="space-y-2 text-xs text-muted-foreground">
+                    <div className="flex items-start gap-2">
+                      <span className="font-medium text-accent min-w-[16px]">1.</span>
+                      <span>Abra o WhatsApp no seu celular</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="font-medium text-accent min-w-[16px]">2.</span>
+                      <span>Vá em Configurações → Dispositivos conectados</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="font-medium text-accent min-w-[16px]">3.</span>
+                      <span>Toque em "Conectar um dispositivo"</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="font-medium text-accent min-w-[16px]">4.</span>
+                      <span>Aponte a câmera para este QR code</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

@@ -39,18 +39,26 @@ export function KanbanCard({ empresa, onDisparar, onAbrirDetalhes, isAContatar, 
         ref={setNodeRef}
         style={style}
         className={`
-          group relative bg-card/60 backdrop-blur-sm border border-border 
+          group relative bg-white dark:bg-gray-900 border border-border 
           rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300
           ${isDragging ? 'opacity-60 scale-95' : 'opacity-100 scale-100'}
           hover:border-accent/40
+          kanban-card-hover
         `}
       >
         {/* Área de Drag - Header */}
         <div
           {...attributes}
           {...listeners}
-          className="p-4 pb-2 cursor-grab active:cursor-grabbing"
+          className="p-4 pb-2 cursor-grab active:cursor-grabbing relative group/drag"
         >
+          {/* Indicador de arraste sutil */}
+          <div className="drag-indicator group-hover/drag:visible">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <div className="w-1.5 h-1.5 bg-accent rounded-full drag-pulse"></div>
+              <span className="hidden sm:block">Arrastar</span>
+            </div>
+          </div>
           <div className="flex items-start justify-between mb-2">
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate mb-1">
@@ -144,9 +152,10 @@ export function KanbanCard({ empresa, onDisparar, onAbrirDetalhes, isAContatar, 
                 flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 
                 rounded-lg text-xs font-medium hover:bg-gray-200 dark:hover:bg-gray-600 
                 transition-all duration-200 flex items-center justify-center gap-1.5 hidden md:flex
+                info-button-hover info-button-glow
               "
             >
-              <Eye size={12} />
+              <Eye size={12} className="info-button-bounce" />
               <span>Detalhes</span>
             </button>
             

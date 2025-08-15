@@ -775,14 +775,14 @@ const ConversasPage: React.FC = () => {
                     {/* Botão para ver informações da empresa */}
                     <button 
                       onClick={handleShowEmpresaDetails}
-                      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-full text-xs font-medium transition-all duration-200 info-button-hover info-button-glow ${
                         showEmpresaDetails 
                           ? 'bg-white/20 text-white' 
                           : 'bg-white/10 text-white hover:bg-white/20'
                       }`}
                       title="Ver informações da empresa"
                     >
-                      <Building size={14} />
+                      <Building size={14} className="info-button-bounce" />
                       <span className="text-xs">
                         {showEmpresaDetails ? 'Ocultar' : 'Empresa'}
                       </span>
@@ -796,10 +796,10 @@ const ConversasPage: React.FC = () => {
                 {!showEmpresaDetails && (conversaSelecionada.website || conversaSelecionada.links_agendamento || conversaSelecionada.categoria || conversaSelecionada.endereco) && (
                   <button 
                     onClick={handleShowEmpresaDetails}
-                    className="w-full px-4 py-3 bg-accent/10 border-b border-accent/20 hover:bg-accent/20 transition-colors"
+                    className="w-full px-4 py-3 bg-accent/10 border-b border-accent/20 hover:bg-accent/20 transition-all duration-200 info-button-hover info-button-glow"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 bg-accent rounded-full flex items-center justify-center flex-shrink-0">
+                      <div className="w-7 h-7 bg-accent rounded-full flex items-center justify-center flex-shrink-0 info-button-bounce">
                         <Building size={16} className="text-accent-foreground" />
                       </div>
                       <div className="flex-1 min-w-0 text-left">

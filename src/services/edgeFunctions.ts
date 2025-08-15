@@ -422,14 +422,85 @@ export async function salvarEmpresas(dados: SalvarEmpresasRequest): Promise<Salv
       };
     });
 
-    // Inserir no banco usando Supabase client diretamente
-    // Usar ON CONFLICT para evitar duplicações de mesma empresa para mesmo usuário
+    // Remover duplicatas baseadas em cid antes de inserir
+    const empresasUnicas = empresasFormatadas.reduce((acc, empresa) => {
+      // Usar cid como chave principal, ou combinação de nome+telefone como fallback
+      const key = empresa.cid || `${empresa.empresa_nome || ''}-${empresa.telefone || ''}`;
+      if (!acc.has(key)) {
+        acc.set(key, empresa);
+      } else {
+        // Se já existe, manter a que tem mais informações
+        const existente = acc.get(key);
+        const infoAtual = Object.values(empresa).filter(v => v !== null && v !== undefined && v !== '').length;
+        const infoExistente = Object.values(existente).filter(v => v !== null && v !== undefined && v !== '').length;
+        
+        if (infoAtual > infoExistente) {
+          acc.set(key, empresa);
+        }
+      }
+      return acc;
+    }, new Map<string, any>());
+
+    const empresasParaInserir = Array.from(empresasUnicas.values());
+
+    console.log(`Empresas únicas para inserir: ${empresasParaInserir.length}`);
+
+    // Verificar se há empresas com cid duplicado no banco para este usuário
+    const cidsParaInserir = empresasParaInserir
+      .filter(empresa => empresa.cid)
+      .map(empresa => empresa.cid);
+
+    if (cidsParaInserir.length > 0) {
+      const { data: duplicatasExistentes } = await supabase
+        .from('empresas')
+        .select('cid')
+        .in('cid', cidsParaInserir)
+        .eq('user_id', user.user.id);
+
+      if (duplicatasExistentes && duplicatasExistentes.length > 0) {
+        const cidsDuplicados = new Set(duplicatasExistentes.map(e => e.cid));
+        const empresasSemDuplicatas = empresasParaInserir.filter(empresa => 
+          !empresa.cid || !cidsDuplicados.has(empresa.cid)
+        );
+
+        console.log(`Empresas após remoção de duplicatas do banco: ${empresasSemDuplicatas.length}`);
+        
+        if (empresasSemDuplicatas.length === 0) {
+          return {
+            success: true,
+            message: 'Todas as empresas já existem no seu banco de dados!',
+            empresasSalvas: 0,
+            empresasExistentes: empresasExistentes.length
+          };
+        }
+
+        // Usar apenas empresas sem duplicatas
+        const { data, error } = await supabase
+          .from('empresas')
+          .insert(empresasSemDuplicatas)
+          .select();
+
+        if (error) {
+          console.error('Erro ao inserir empresas:', error);
+          return {
+            success: false,
+            error: 'Erro ao salvar empresas no banco'
+          };
+        }
+
+        return {
+          success: true,
+          message: `${data?.length || 0} empresas salvas com sucesso!`,
+          empresasSalvas: data?.length || 0,
+          empresasExistentes: empresasExistentes.length
+        };
+      }
+    }
+
+    // Se não há duplicatas, usar insert normal em vez de upsert para evitar conflitos
     const { data, error } = await supabase
       .from('empresas')
-      .upsert(empresasFormatadas, {
-        onConflict: 'cid,user_id',
-        ignoreDuplicates: false
-      })
+      .insert(empresasParaInserir)
       .select();
 
     if (error) {
@@ -443,6 +514,9 @@ export async function salvarEmpresas(dados: SalvarEmpresasRequest): Promise<Salv
         console.warn('Dados truncados devido a limite de tamanho');
       } else if (error.code === '23505') {
         errorMessage = 'Algumas empresas já existem no seu banco de dados.';
+      } else if (error.code === '21000') {
+        errorMessage = 'Erro de duplicação detectado. Tentando inserir apenas empresas únicas...';
+        console.warn('Erro de duplicação, tentando abordagem alternativa');
       } else if (error.message?.includes('value too long')) {
         errorMessage = 'Alguns dados das empresas excedem o limite permitido. Tente novamente.';
       } else if (error.message?.includes('violates row-level security')) {

@@ -17,16 +17,34 @@ export function KanbanColumn({ column, onDisparar, onAbrirDetalhes, isOver, minW
     id: column.id
   });
 
+  // Função para obter a cor de fundo da coluna baseada no status
+  const getColumnBackgroundColor = (columnId: string) => {
+    switch (columnId) {
+      case 'a_contatar':
+        return 'bg-gray-200 dark:bg-gray-700/50';
+      case 'contato_realizado':
+        return 'bg-blue-100 dark:bg-blue-800/40';
+      case 'em_negociacao':
+        return 'bg-purple-100 dark:bg-purple-800/40';
+      case 'ganhos':
+        return 'bg-green-100 dark:bg-green-800/40';
+      case 'perdidos':
+        return 'bg-red-100 dark:bg-red-800/40';
+      default:
+        return 'bg-gray-150 dark:bg-gray-700/40';
+    }
+  };
+
   return (
     <div className={`
-      flex flex-col h-full
+      flex flex-col h-full rounded-xl overflow-hidden
       ${minWidthClass || 'min-w-[320px] max-w-[320px]'}
       transform transition-transform duration-300
       ${isOver ? 'scale-[1.02]' : 'scale-100'}
     `}>
       {/* Cabeçalho da Coluna */}
       <div className={`
-        p-3 md:p-4 rounded-t-xl bg-gradient-to-r ${column.color} shadow-sm
+        p-3 md:p-4 bg-gradient-to-r ${column.color} shadow-sm
         transition-all duration-300
         ${isOver ? 'shadow-md shadow-accent/10' : ''}
       `}>
@@ -60,9 +78,10 @@ export function KanbanColumn({ column, onDisparar, onAbrirDetalhes, isOver, minW
       <div
         ref={setNodeRef}
         className={`
-          flex-1 p-2 md:p-3 space-y-2 md:space-y-3 bg-card/50 backdrop-blur-sm border-x border-b border-border rounded-b-xl overflow-y-auto
+          flex-1 p-2 md:p-3 space-y-2 md:space-y-3 overflow-y-auto
           transition-colors duration-300
-          ${isOver ? 'bg-card/70 border-accent/30' : ''}
+          ${getColumnBackgroundColor(column.id)}
+          ${isOver ? 'border-accent/30' : ''}
         `}
         style={{ height: 'calc(100vh - 300px)' }}
       >

@@ -173,7 +173,28 @@ export const PlanLimitsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         case 'fazer_disparo':
           return (limits.disparosUsados + quantity) <= limits.maxDisparos;
         case 'criar_conexao':
-          return (limits.conexoesUsadas + quantity) <= limits.maxConexoes;
+          // Verificar se o usuário tem instâncias ativas antes de aplicar limite
+          try {
+            if (user?.id) {
+              const { data: existingInstances } = await supabase
+                .from('whatsapp_instances')
+                .select('id')
+                .eq('user_id', user.id);
+              
+              // Se não tem instâncias, permitir criar (sem limite)
+              if (!existingInstances || existingInstances.length === 0) {
+                console.log('Usuário não tem instâncias ativas, permitindo criar conexão sem limite');
+                return true;
+              }
+            }
+            
+            // Se tem instâncias ou erro, aplicar limite normal
+            return (limits.conexoesUsadas + quantity) <= limits.maxConexoes;
+          } catch (error) {
+            console.error('Erro ao verificar instâncias existentes:', error);
+            // Em caso de erro, aplicar limite normal
+            return (limits.conexoesUsadas + quantity) <= limits.maxConexoes;
+          }
         case 'criar_template':
           return (limits.templatesUsados + quantity) <= limits.maxTemplates;
         default:
@@ -189,7 +210,9 @@ export const PlanLimitsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       case 'disparos':
         return Math.max(0, limits.maxDisparos - limits.disparosUsados);
       case 'conexoes':
-        return Math.max(0, limits.maxConexoes - limits.conexoesUsadas);
+        // Para conexões, sempre retornar pelo menos 1 se não houver instâncias
+        // A verificação real será feita em canPerformAction
+        return Math.max(1, limits.maxConexoes - limits.conexoesUsadas);
       case 'templates':
         return Math.max(0, limits.maxTemplates - limits.templatesUsados);
       default:

@@ -239,14 +239,14 @@ const DashboardPage: React.FC = () => {
         {/* KPIs Principais - Design Minimalista */}
         <div className="grid grid-cols-2 gap-2 md:gap-4 mb-4 md:mb-6 w-full mt-4">
           {/* Empresas Buscadas */}
-          <div className="bg-card border border-border rounded-lg md:rounded-xl p-3 md:p-4 hover:border-accent/40 transition-all shadow-sm">
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/20 border border-purple-200 dark:border-purple-800/50 rounded-lg md:rounded-xl p-3 md:p-4 hover:border-purple-300 dark:hover:border-purple-700/70 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center justify-between mb-2">
               <div>
                 <span className="text-lg md:text-2xl font-bold text-foreground">{stats?.totalEmpresas || 0}</span>
                 <span className="text-xs md:text-sm text-muted-foreground ml-1">empresas</span>
               </div>
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-accent/15 rounded-lg flex items-center justify-center">
-                <Target size={16} className="text-accent md:text-[20px]" />
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-500/20 dark:bg-purple-400/20 rounded-lg flex items-center justify-center">
+                <Target size={16} className="text-purple-600 dark:text-purple-400 md:text-[20px]" />
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Empresas Buscadas</h3>
@@ -254,14 +254,14 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Taxa de Resposta */}
-          <div className="bg-card border border-border rounded-lg md:rounded-xl p-3 md:p-4 hover:border-accent/40 transition-all shadow-sm">
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/20 border border-purple-200 dark:border-purple-800/50 rounded-lg md:rounded-xl p-3 md:p-4 hover:border-purple-300 dark:hover:border-purple-700/70 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center justify-between mb-2">
               <div>
                 <span className="text-lg md:text-2xl font-bold text-foreground">{taxaResposta}%</span>
                 <span className="text-xs md:text-sm text-muted-foreground ml-1">taxa</span>
               </div>
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-accent/15 rounded-lg flex items-center justify-center">
-                <BarChart3 size={16} className="text-accent md:text-[20px]" />
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-500/20 dark:bg-purple-400/20 rounded-lg flex items-center justify-center">
+                <BarChart3 size={16} className="text-purple-600 dark:text-purple-400 md:text-[20px]" />
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Taxa de Resposta</h3>
@@ -269,14 +269,14 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Negócios Ganhos */}
-          <div className="bg-card border border-border rounded-lg md:rounded-xl p-3 md:p-4 hover:border-accent/40 transition-all shadow-sm">
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/20 border border-purple-200 dark:border-purple-800/50 rounded-lg md:rounded-xl p-3 md:p-4 hover:border-purple-300 dark:hover:border-purple-700/70 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center justify-between mb-2">
               <div>
                 <span className="text-lg md:text-2xl font-bold text-foreground">{negociosGanhos}</span>
                 <span className="text-xs md:text-sm text-muted-foreground ml-1">negócios</span>
               </div>
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-accent/15 rounded-lg flex items-center justify-center">
-                <Star size={16} className="text-accent md:text-[20px]" />
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-500/20 dark:bg-purple-400/20 rounded-lg flex items-center justify-center">
+                <Star size={16} className="text-purple-600 dark:text-purple-400 md:text-[20px]" />
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Negócios Ganhos</h3>
@@ -284,14 +284,14 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Total de Disparos */}
-          <div className="bg-card border border-border rounded-lg md:rounded-xl p-3 md:p-4 hover:border-accent/40 transition-all shadow-sm">
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/20 border border-purple-200 dark:border-purple-800/50 rounded-lg md:rounded-xl p-3 md:p-4 hover:border-purple-300 dark:hover:border-purple-700/70 transition-all shadow-sm hover:shadow-md">
             <div className="flex items-center justify-between mb-2">
               <div>
                 <span className="text-lg md:text-2xl font-bold text-foreground">{totalDisparos}</span>
                 <span className="text-xs md:text-sm text-muted-foreground ml-1">disparos</span>
               </div>
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-accent/15 rounded-lg flex items-center justify-center">
-                <MessageCircle size={16} className="text-accent md:text-[20px]" />
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-500/20 dark:bg-purple-400/20 rounded-lg flex items-center justify-center">
+                <MessageCircle size={16} className="text-purple-600 dark:text-purple-400 md:text-[20px]" />
               </div>
             </div>
             <h3 className="text-xs md:text-sm font-medium text-foreground">Total de Disparos</h3>

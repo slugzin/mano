@@ -757,12 +757,30 @@ const DisparosHistoricoPage: React.FC = () => {
                               </div>
                             ) : empresasCampanha[campanha.id] ? (
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {empresasCampanha[campanha.id]?.map((empresa) => (
-                                  <div 
+                                {empresasCampanha[campanha.id]?.map((empresa, index) => (
+                                  <motion.div 
                                     key={empresa.id} 
-                                    className="bg-card rounded-lg p-3 border border-border cursor-pointer hover:bg-muted/5 transition-colors"
+                                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    transition={{ 
+                                      duration: 0.3, 
+                                      delay: index * 0.1,
+                                      ease: "easeOut"
+                                    }}
+                                    whileHover={{ 
+                                      y: -4, 
+                                      scale: 1.02,
+                                      transition: { duration: 0.2 }
+                                    }}
+                                    whileTap={{ scale: 0.98 }}
+                                    className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/30 rounded-xl p-4 border-2 border-purple-200 dark:border-purple-700 cursor-pointer shadow-lg hover:shadow-xl transition-all duration-300 group relative overflow-hidden"
                                     onClick={() => openConversaModal(empresa)}
                                   >
+                                    {/* Borda de destaque minimalista */}
+                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-purple-600"></div>
+                                    
+                                    {/* Efeito de brilho sutil */}
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 transform -skew-x-12 -translate-x-full group-hover:translate-x-full"></div>
                                     <div className="flex items-start justify-between mb-2">
                                       <h5 className="font-medium text-sm text-foreground truncate pr-2">
                                         {empresa.empresa_nome}
@@ -830,7 +848,7 @@ const DisparosHistoricoPage: React.FC = () => {
                                         </p>
                                       )}
                                     </div>
-                                  </div>
+                                  </motion.div>
                                 ))}
                               </div>
                             ) : (
@@ -1076,12 +1094,25 @@ const DisparosHistoricoPage: React.FC = () => {
                                 </div>
                               ) : empresasCampanha[campanha.id] ? (
                                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                                  {empresasCampanha[campanha.id]?.slice(0, empresasVisiveis[campanha.id] || 5).map((empresa) => (
-                                    <div 
+                                  {empresasCampanha[campanha.id]?.slice(0, empresasVisiveis[campanha.id] || 5).map((empresa, index) => (
+                                    <motion.div 
                                       key={empresa.id} 
-                                      className={`bg-background rounded-lg p-2 border border-border transition-colors ${
+                                      initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                                      transition={{ 
+                                        duration: 0.3, 
+                                        delay: index * 0.1,
+                                        ease: "easeOut"
+                                      }}
+                                      whileHover={{ 
+                                        x: 4, 
+                                        scale: 1.02,
+                                        transition: { duration: 0.2 }
+                                      }}
+                                      whileTap={{ scale: 0.98 }}
+                                      className={`bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/30 rounded-lg p-3 border-2 border-purple-200 dark:border-purple-700 transition-all duration-300 group relative overflow-hidden shadow-md hover:shadow-lg ${
                                         empresa.status === 'enviado' || empresa.status === 'concluido' 
-                                          ? 'cursor-pointer hover:bg-accent/5 hover:border-accent/40' 
+                                          ? 'cursor-pointer' 
                                           : ''
                                       }`}
                                       onClick={() => redirectToConversas(empresa)}
@@ -1091,6 +1122,11 @@ const DisparosHistoricoPage: React.FC = () => {
                                           : ''
                                       }
                                     >
+                                      {/* Borda de destaque minimalista mobile */}
+                                      <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-purple-400 to-purple-600"></div>
+                                      
+                                      {/* Efeito de brilho sutil mobile */}
+                                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 transform -skew-x-12 -translate-x-full group-hover:translate-x-full"></div>
                                       {/* Header do Card */}
                                       <div className="flex items-start justify-between mb-2">
                                         <h5 className="text-xs font-medium text-foreground truncate pr-2 flex-1">
@@ -1161,7 +1197,7 @@ const DisparosHistoricoPage: React.FC = () => {
                                           </span>
                                         </div>
                                       </div>
-                                    </div>
+                                    </motion.div>
                                   ))}
                                   {empresasCampanha[campanha.id] && (empresasVisiveis[campanha.id] || 5) < empresasCampanha[campanha.id].length && (
                                     <button
